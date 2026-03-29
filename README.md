@@ -4,6 +4,16 @@
 
 GateKeep manages Snowflake roles and permissions through declarative YAML configurations, with a focus on **parallelization** and **performance** (5-10x faster than sequential tools).
 
+---
+
+## 📖 New to GateKeep?
+
+**👉 [Read the Complete Getting Started Guide](docs/getting-started.md)**
+
+Learn how to adopt GateKeep in your company with step-by-step instructions, real-world examples, and best practices.
+
+---
+
 ## Features
 
 - 🚀 **5-10x faster** than Permifrost through parallel execution
