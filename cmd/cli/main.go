@@ -54,9 +54,9 @@ func handleSync() {
 				},
 			},
 			"summary": map[string]int{
-				"roles_created":   0,
-				"grants_added":    0,
-				"grants_revoked":  0,
+				"roles_created":  0,
+				"grants_added":   0,
+				"grants_revoked": 0,
 			},
 		}
 
