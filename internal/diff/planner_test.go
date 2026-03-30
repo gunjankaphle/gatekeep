@@ -6,7 +6,7 @@ import (
 )
 
 func TestPlanner_GeneratePlan_Empty(t *testing.T) {
-	diff := &DiffResult{}
+	diff := &Result{}
 	diff.ComputeSummary()
 
 	planner := NewPlanner(diff)
@@ -21,7 +21,7 @@ func TestPlanner_GeneratePlan_Empty(t *testing.T) {
 }
 
 func TestPlanner_GeneratePlan_CreateRole(t *testing.T) {
-	diff := &DiffResult{
+	diff := &Result{
 		RolesToCreate: []string{"ANALYST_ROLE", "ENGINEER_ROLE"},
 	}
 	diff.ComputeSummary()
@@ -48,7 +48,7 @@ func TestPlanner_GeneratePlan_CreateRole(t *testing.T) {
 }
 
 func TestPlanner_GeneratePlan_RoleHierarchy(t *testing.T) {
-	diff := &DiffResult{
+	diff := &Result{
 		RolesToCreate: []string{"CHILD_ROLE", "PARENT_ROLE"},
 		RoleGrantsToAdd: []RoleGrant{
 			{Role: "CHILD_ROLE", ToRole: "PARENT_ROLE"},
@@ -100,7 +100,7 @@ func TestPlanner_GeneratePlan_RoleHierarchy(t *testing.T) {
 }
 
 func TestPlanner_GeneratePlan_ObjectGrants(t *testing.T) {
-	diff := &DiffResult{
+	diff := &Result{
 		ObjectGrantsToAdd: []ObjectGrant{
 			{
 				Privilege:  "SELECT",
@@ -144,7 +144,7 @@ func TestPlanner_GeneratePlan_ObjectGrants(t *testing.T) {
 }
 
 func TestPlanner_GeneratePlan_Users(t *testing.T) {
-	diff := &DiffResult{
+	diff := &Result{
 		UsersToCreate: []string{"john.doe@company.com"},
 		UserRoleGrantsToAdd: []UserRoleGrant{
 			{Role: "ANALYST_ROLE", ToUser: "john.doe@company.com"},
@@ -196,7 +196,7 @@ func TestPlanner_GeneratePlan_Users(t *testing.T) {
 }
 
 func TestPlanner_GeneratePlan_Revocations(t *testing.T) {
-	diff := &DiffResult{
+	diff := &Result{
 		UserRoleGrantsToRevoke: []UserRoleGrant{
 			{Role: "OLD_ROLE", ToUser: "john.doe@company.com"},
 		},
@@ -250,7 +250,7 @@ func TestPlanner_GeneratePlan_Revocations(t *testing.T) {
 }
 
 func TestPlanner_GeneratePlan_DeleteRoles(t *testing.T) {
-	diff := &DiffResult{
+	diff := &Result{
 		RolesToDelete: []string{"OLD_ROLE", "UNUSED_ROLE"},
 	}
 	diff.ComputeSummary()
@@ -278,7 +278,7 @@ func TestPlanner_GeneratePlan_DeleteRoles(t *testing.T) {
 
 func TestPlanner_GeneratePlan_CorrectOrdering(t *testing.T) {
 	// Complex scenario testing correct phase ordering
-	diff := &DiffResult{
+	diff := &Result{
 		DatabasesToCreate:  []string{"NEW_DB"},
 		WarehousesToCreate: []string{"NEW_WH"},
 		RolesToCreate:      []string{"NEW_ROLE"},
@@ -307,15 +307,15 @@ func TestPlanner_GeneratePlan_CorrectOrdering(t *testing.T) {
 
 	// Verify operation order by phase
 	expectedPhases := []OperationType{
-		OpCreateDatabase,   // Phase 1: Resources
-		OpCreateWarehouse,  // Phase 1: Resources
-		OpCreateRole,       // Phase 2: Roles
-		OpGrantRole,        // Phase 3: Role hierarchy
-		OpGrantObject,      // Phase 4: Object permissions
-		OpCreateUser,       // Phase 5: Users
-		OpGrantUserRole,    // Phase 6: User role grants
-		OpRevokeUserRole,   // Phase 7: Revocations
-		OpDeleteRole,       // Phase 8: Delete roles
+		OpCreateDatabase,  // Phase 1: Resources
+		OpCreateWarehouse, // Phase 1: Resources
+		OpCreateRole,      // Phase 2: Roles
+		OpGrantRole,       // Phase 3: Role hierarchy
+		OpGrantObject,     // Phase 4: Object permissions
+		OpCreateUser,      // Phase 5: Users
+		OpGrantUserRole,   // Phase 6: User role grants
+		OpRevokeUserRole,  // Phase 7: Revocations
+		OpDeleteRole,      // Phase 8: Delete roles
 	}
 
 	if len(operations) != len(expectedPhases) {
@@ -333,7 +333,7 @@ func TestPlanner_GeneratePlan_CorrectOrdering(t *testing.T) {
 }
 
 func TestPlanner_GeneratePlan_SystemRoles_NotDeleted(t *testing.T) {
-	diff := &DiffResult{
+	diff := &Result{
 		RolesToDelete: []string{"ACCOUNTADMIN", "CUSTOM_ROLE", "PUBLIC"},
 	}
 	diff.ComputeSummary()

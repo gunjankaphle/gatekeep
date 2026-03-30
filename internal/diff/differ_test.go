@@ -11,7 +11,7 @@ import (
 func TestDiffer_ComputeDiff_EmptyStates(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
-	input := DiffInput{
+	input := Input{
 		DesiredConfig: config.Config{},
 		ActualState:   snowflake.State{},
 		Mode:          SyncModeStrict,
@@ -34,7 +34,7 @@ func TestDiffer_ComputeDiff_EmptyStates(t *testing.T) {
 func TestDiffer_ComputeDiff_CreateRoles(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
-	input := DiffInput{
+	input := Input{
 		DesiredConfig: config.Config{
 			Version: "1.0",
 			Roles: []config.Role{
@@ -81,7 +81,7 @@ func TestDiffer_ComputeDiff_CreateRoles(t *testing.T) {
 func TestDiffer_ComputeDiff_DeleteRoles_StrictMode(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
-	input := DiffInput{
+	input := Input{
 		DesiredConfig: config.Config{
 			Version: "1.0",
 			Roles: []config.Role{
@@ -114,7 +114,7 @@ func TestDiffer_ComputeDiff_DeleteRoles_StrictMode(t *testing.T) {
 func TestDiffer_ComputeDiff_DeleteRoles_AdditiveMode(t *testing.T) {
 	differ := NewDiffer(SyncModeAdditive)
 
-	input := DiffInput{
+	input := Input{
 		DesiredConfig: config.Config{
 			Version: "1.0",
 			Roles: []config.Role{
@@ -143,7 +143,7 @@ func TestDiffer_ComputeDiff_DeleteRoles_AdditiveMode(t *testing.T) {
 func TestDiffer_ComputeDiff_RoleHierarchy(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
-	input := DiffInput{
+	input := Input{
 		DesiredConfig: config.Config{
 			Version: "1.0",
 			Roles: []config.Role{
@@ -180,7 +180,7 @@ func TestDiffer_ComputeDiff_RoleHierarchy(t *testing.T) {
 func TestDiffer_ComputeDiff_ObjectGrants(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
-	input := DiffInput{
+	input := Input{
 		DesiredConfig: config.Config{
 			Version: "1.0",
 			Databases: []config.Database{
@@ -252,7 +252,7 @@ func TestDiffer_ComputeDiff_ObjectGrants(t *testing.T) {
 func TestDiffer_ComputeDiff_Users(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
-	input := DiffInput{
+	input := Input{
 		DesiredConfig: config.Config{
 			Version: "1.0",
 			Users: []config.User{
@@ -294,7 +294,7 @@ func TestDiffer_ComputeDiff_Users(t *testing.T) {
 func TestDiffer_ComputeDiff_UserRoleRevoke_StrictMode(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
-	input := DiffInput{
+	input := Input{
 		DesiredConfig: config.Config{
 			Version: "1.0",
 			Users: []config.User{
@@ -334,7 +334,7 @@ func TestDiffer_ComputeDiff_UserRoleRevoke_StrictMode(t *testing.T) {
 func TestDiffer_ComputeDiff_SystemRoles_NotDeleted(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
-	input := DiffInput{
+	input := Input{
 		DesiredConfig: config.Config{
 			Version: "1.0",
 			Roles:   []config.Role{},
@@ -368,7 +368,7 @@ func TestDiffer_ComputeDiff_SystemRoles_NotDeleted(t *testing.T) {
 func TestDiffer_ComputeDiff_ComplexScenario(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
-	input := DiffInput{
+	input := Input{
 		DesiredConfig: config.Config{
 			Version: "1.0",
 			Roles: []config.Role{

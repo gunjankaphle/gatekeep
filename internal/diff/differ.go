@@ -19,8 +19,8 @@ func NewDiffer(mode SyncMode) *Differ {
 }
 
 // ComputeDiff compares desired config vs actual Snowflake state
-func (d *Differ) ComputeDiff(input DiffInput) (*DiffResult, error) {
-	result := &DiffResult{}
+func (d *Differ) ComputeDiff(input Input) (*Result, error) {
+	result := &Result{}
 
 	// Build lookup maps for actual state
 	actualRoles := buildRoleMap(input.ActualState.Roles)
@@ -37,7 +37,7 @@ func (d *Differ) ComputeDiff(input DiffInput) (*DiffResult, error) {
 	// 2. Diff role hierarchies (parent role grants)
 	result.RoleGrantsToAdd = d.diffRoleGrantsToAdd(input.DesiredConfig.Roles, actualRoles)
 	if d.mode == SyncModeStrict {
-		result.RoleGrantsToRevoke = d.diffRoleGrantsToRevoke(input.DesiredConfig.Roles, actualRoles)
+		result.RoleGrantsToRevoke = d.diffRoleGrantsToRevoke(input.DesiredConfig.Roles)
 	}
 
 	// 3. Diff object grants (permissions on databases, tables, warehouses, etc.)
@@ -116,7 +116,9 @@ func (d *Differ) diffRoleGrantsToAdd(desiredRoles []config.Role, actualRoles map
 }
 
 // diffRoleGrantsToRevoke finds role hierarchy grants to revoke
-func (d *Differ) diffRoleGrantsToRevoke(desiredRoles []config.Role, actualRoles map[string]snowflake.Role) []RoleGrant {
+//
+//nolint:unparam // Placeholder - will be implemented when ReadGrants (VAR-13) is complete
+func (d *Differ) diffRoleGrantsToRevoke(desiredRoles []config.Role) []RoleGrant {
 	// Build map of desired role grants
 	desiredGrants := make(map[string]map[string]bool) // role -> parent roles
 	for _, role := range desiredRoles {
@@ -308,22 +310,6 @@ func buildWarehouseMap(warehouses []snowflake.Warehouse) map[string]snowflake.Wa
 	m := make(map[string]snowflake.Warehouse)
 	for _, wh := range warehouses {
 		m[wh.Name] = wh
-	}
-	return m
-}
-
-func buildDesiredRoleMap(roles []config.Role) map[string]config.Role {
-	m := make(map[string]config.Role)
-	for _, role := range roles {
-		m[role.Name] = role
-	}
-	return m
-}
-
-func buildDesiredUserMap(users []config.User) map[string]config.User {
-	m := make(map[string]config.User)
-	for _, user := range users {
-		m[user.Name] = user
 	}
 	return m
 }

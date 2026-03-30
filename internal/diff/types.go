@@ -15,8 +15,8 @@ const (
 	SyncModeAdditive SyncMode = "additive"
 )
 
-// DiffResult represents the complete diff between desired and actual state
-type DiffResult struct {
+// Result represents the complete diff between desired and actual state
+type Result struct {
 	// Roles
 	RolesToCreate []string
 	RolesToDelete []string // Empty in additive mode
@@ -41,15 +41,15 @@ type DiffResult struct {
 	WarehousesToCreate []string
 
 	// Summary statistics
-	Summary DiffSummary
+	Summary Stats
 }
 
 // RoleGrant represents a role granted to another role (role hierarchy)
 type RoleGrant struct {
-	Role       string // The role being granted
-	ToRole     string // The role receiving the grant (parent role)
-	GrantedBy  string // Who granted it (optional)
-	GrantedAt  string // When it was granted (optional)
+	Role      string // The role being granted
+	ToRole    string // The role receiving the grant (parent role)
+	GrantedBy string // Who granted it (optional)
+	GrantedAt string // When it was granted (optional)
 }
 
 // ObjectGrant represents a privilege granted on an object to a role
@@ -67,8 +67,8 @@ type UserRoleGrant struct {
 	ToUser string // The user receiving the grant
 }
 
-// DiffSummary provides a high-level summary of changes
-type DiffSummary struct {
+// Stats provides a high-level summary of changes
+type Stats struct {
 	TotalOperations int
 
 	RolesCreated int
@@ -89,21 +89,21 @@ type DiffSummary struct {
 	WarehousesCreated int
 }
 
-// DiffInput contains the input data for the diff engine
-type DiffInput struct {
+// Input contains the input data for the diff engine
+type Input struct {
 	DesiredConfig config.Config
 	ActualState   snowflake.State
 	Mode          SyncMode
 }
 
 // IsEmpty returns true if the diff has no changes
-func (d *DiffResult) IsEmpty() bool {
+func (d *Result) IsEmpty() bool {
 	return d.Summary.TotalOperations == 0
 }
 
 // ComputeSummary calculates summary statistics
-func (d *DiffResult) ComputeSummary() {
-	d.Summary = DiffSummary{
+func (d *Result) ComputeSummary() {
+	d.Summary = Stats{
 		RolesCreated:          len(d.RolesToCreate),
 		RolesDeleted:          len(d.RolesToDelete),
 		RoleGrantsAdded:       len(d.RoleGrantsToAdd),

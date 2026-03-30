@@ -17,6 +17,7 @@ type SQLOperation struct {
 // OperationType categorizes SQL operations for ordering
 type OperationType string
 
+// Operation type constants for SQL operations
 const (
 	OpCreateDatabase  OperationType = "CREATE_DATABASE"
 	OpCreateWarehouse OperationType = "CREATE_WAREHOUSE"
@@ -34,24 +35,25 @@ const (
 // ExecutionPhase groups operations that can run in parallel
 type ExecutionPhase int
 
+// Execution phase constants defining the order of operations
 const (
-	PhaseCreateResources ExecutionPhase = iota // Databases, warehouses
-	PhaseCreateRoles                           // Create all roles
-	PhaseGrantRoleHierarchy                    // GRANT ROLE TO ROLE
-	PhaseGrantObjectPermissions                // GRANT privileges ON object
-	PhaseCreateUsers                           // Create users
-	PhaseGrantUserRoles                        // GRANT ROLE TO USER
-	PhaseRevokePermissions                     // All REVOKE operations
-	PhaseDeleteRoles                           // DROP ROLE
+	PhaseCreateResources        ExecutionPhase = iota // Databases, warehouses
+	PhaseCreateRoles                                  // Create all roles
+	PhaseGrantRoleHierarchy                           // GRANT ROLE TO ROLE
+	PhaseGrantObjectPermissions                       // GRANT privileges ON object
+	PhaseCreateUsers                                  // Create users
+	PhaseGrantUserRoles                               // GRANT ROLE TO USER
+	PhaseRevokePermissions                            // All REVOKE operations
+	PhaseDeleteRoles                                  // DROP ROLE
 )
 
 // Planner generates SQL statements from diff results
 type Planner struct {
-	diff *DiffResult
+	diff *Result
 }
 
 // NewPlanner creates a new SQL planner
-func NewPlanner(diff *DiffResult) *Planner {
+func NewPlanner(diff *Result) *Planner {
 	return &Planner{diff: diff}
 }
 
@@ -64,18 +66,10 @@ func (p *Planner) GeneratePlan() ([]SQLOperation, error) {
 	operations = append(operations, p.generateCreateWarehouses()...)
 
 	// Phase 2: Create roles (in dependency order)
-	createRoleOps, err := p.generateCreateRoles()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate create role operations: %w", err)
-	}
-	operations = append(operations, createRoleOps...)
+	operations = append(operations, p.generateCreateRoles()...)
 
 	// Phase 3: Grant role hierarchies (parent role assignments)
-	grantRoleOps, err := p.generateGrantRoles()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate grant role operations: %w", err)
-	}
-	operations = append(operations, grantRoleOps...)
+	operations = append(operations, p.generateGrantRoles()...)
 
 	// Phase 4: Grant object permissions
 	operations = append(operations, p.generateGrantObjects()...)
@@ -126,7 +120,7 @@ func (p *Planner) generateCreateWarehouses() []SQLOperation {
 }
 
 // generateCreateRoles generates CREATE ROLE statements in dependency order
-func (p *Planner) generateCreateRoles() ([]SQLOperation, error) {
+func (p *Planner) generateCreateRoles() []SQLOperation {
 	var ops []SQLOperation
 
 	// Sort roles to ensure deterministic output
@@ -143,11 +137,11 @@ func (p *Planner) generateCreateRoles() ([]SQLOperation, error) {
 		})
 	}
 
-	return ops, nil
+	return ops
 }
 
 // generateGrantRoles generates GRANT ROLE TO ROLE statements (role hierarchy)
-func (p *Planner) generateGrantRoles() ([]SQLOperation, error) {
+func (p *Planner) generateGrantRoles() []SQLOperation {
 	var ops []SQLOperation
 
 	// Build dependency graph to ensure parent roles are granted first
@@ -170,7 +164,7 @@ func (p *Planner) generateGrantRoles() ([]SQLOperation, error) {
 		})
 	}
 
-	return ops, nil
+	return ops
 }
 
 // generateGrantObjects generates GRANT privilege ON object TO ROLE statements
