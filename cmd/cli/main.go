@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/yourusername/gatekeep/internal/config"
 )
 
 func main() {
@@ -89,8 +91,24 @@ func handleValidate() {
 		os.Exit(1)
 	}
 
-	fmt.Println("GateKeep Validate - Coming soon!")
-	fmt.Println("Real implementation will be available in Epic 2.")
+	// Get config file path from args
+	if validateCmd.NArg() == 0 {
+		fmt.Fprintf(os.Stderr, "Error: config file path required\n")
+		fmt.Fprintf(os.Stderr, "Usage: gatekeep validate <config.yaml>\n")
+		os.Exit(1)
+	}
+
+	configPath := validateCmd.Arg(0)
+
+	// Parse and validate config
+	parser := config.NewParser()
+	_, err := parser.ParseFile(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "✗ Validation failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✓ Configuration valid: %s\n", configPath)
 	os.Exit(0)
 }
 
