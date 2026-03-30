@@ -1,0 +1,28 @@
+version: 1.0
+
+# Example GateKeep configuration
+# Copy this file and customize for your environment
+
+roles:
+  - name: MY_ROLE
+    comment: "Example role"
+
+users:
+  - name: user@example.com
+    roles: [MY_ROLE]
+
+databases:
+  - name: MY_DATABASE
+    schemas:
+      - name: MY_SCHEMA
+        tables:
+          - name: MY_TABLE
+            grants:
+              - to_role: MY_ROLE
+                privileges: [SELECT]
+
+warehouses:
+  - name: MY_WAREHOUSE
+    grants:
+      - to_role: MY_ROLE
+        privileges: [USAGE]

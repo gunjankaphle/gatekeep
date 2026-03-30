@@ -1,0 +1,50 @@
+version: 1.0
+
+# Production Snowflake configuration
+# This file is managed via GitOps - changes will trigger automatic sync
+
+roles:
+  - name: READ_ONLY_ROLE
+    comment: "Base role with read-only access"
+
+  - name: ANALYST_ROLE
+    parent_roles: [READ_ONLY_ROLE]
+    comment: "Data analysts role with select privileges"
+
+  - name: ENGINEER_ROLE
+    parent_roles: [ANALYST_ROLE]
+    comment: "Data engineers role with write privileges"
+
+users:
+  - name: analyst@company.com
+    roles: [ANALYST_ROLE]
+
+  - name: engineer@company.com
+    roles: [ENGINEER_ROLE]
+
+databases:
+  - name: PROD_DB
+    schemas:
+      - name: PUBLIC
+        tables:
+          - name: CUSTOMERS
+            grants:
+              - to_role: ANALYST_ROLE
+                privileges: [SELECT]
+              - to_role: ENGINEER_ROLE
+                privileges: [SELECT, INSERT, UPDATE, DELETE]
+
+          - name: ORDERS
+            grants:
+              - to_role: ANALYST_ROLE
+                privileges: [SELECT]
+              - to_role: ENGINEER_ROLE
+                privileges: [SELECT, INSERT, UPDATE, DELETE]
+
+warehouses:
+  - name: ANALYTICS_WH
+    grants:
+      - to_role: ANALYST_ROLE
+        privileges: [USAGE]
+      - to_role: ENGINEER_ROLE
+        privileges: [USAGE, OPERATE]

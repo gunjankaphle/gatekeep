@@ -1,0 +1,89 @@
+name: GateKeep Preview
+
+on:
+  pull_request:
+    paths:
+      - 'snowflake/**.yaml'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  dry-run:
+    name: Dry-Run Preview
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build GateKeep CLI
+        run: |
+          go build -o gatekeep ./cmd/cli
+
+      - name: Run dry-run
+        id: dryrun
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+        run: |
+          ./gatekeep sync --config snowflake/prod.yaml --dry-run --format json > dry-run-result.json
+        continue-on-error: true
+
+      - name: Comment PR with SQL changes
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+
+            let result;
+            let comment = '## 🔍 GateKeep Dry-Run Results\n\n';
+
+            try {
+              result = JSON.parse(fs.readFileSync('dry-run-result.json', 'utf8'));
+
+              if (result.status === 'success' || result.operations) {
+                const operations = result.operations || [];
+                const sqlStatements = operations.map(op => op.sql).join('\n\n');
+
+                comment += `**${operations.length} operations** will be executed when this PR is merged:\n\n`;
+                comment += '```sql\n';
+                comment += sqlStatements || 'No operations required (already in sync)';
+                comment += '\n```\n\n';
+                comment += '### Summary\n';
+                comment += `- **Roles to create**: ${result.summary?.roles_created || 0}\n`;
+                comment += `- **Grants to add**: ${result.summary?.grants_added || 0}\n`;
+                comment += `- **Grants to revoke**: ${result.summary?.grants_revoked || 0}\n\n`;
+                comment += '⚠️ Review these changes carefully before merging.';
+              } else if (result.error) {
+                comment += '❌ **Dry-run failed**\n\n';
+                comment += '```\n';
+                comment += result.error;
+                comment += '\n```\n\n';
+                comment += 'Please fix the configuration errors before merging.';
+              }
+            } catch (error) {
+              comment += '❌ **Failed to parse dry-run results**\n\n';
+              comment += 'The dry-run command may have failed. Check the workflow logs for details.\n\n';
+              comment += '```\n';
+              comment += error.message;
+              comment += '\n```';
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

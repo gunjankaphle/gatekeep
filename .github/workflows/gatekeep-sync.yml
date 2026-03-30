@@ -1,0 +1,110 @@
+name: GateKeep Sync
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'snowflake/**.yaml'
+
+permissions:
+  contents: read
+  statuses: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Sync to Snowflake
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build GateKeep CLI
+        run: |
+          go build -o gatekeep ./cmd/cli
+
+      - name: Run sync
+        id: sync
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          POSTGRES_DSN: ${{ secrets.POSTGRES_DSN }}
+        run: |
+          ./gatekeep sync --config snowflake/prod.yaml --format json > sync-result.json
+        continue-on-error: true
+
+      - name: Post sync status
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+
+            let result;
+            let status = 'failure';
+            let message = '';
+
+            try {
+              result = JSON.parse(fs.readFileSync('sync-result.json', 'utf8'));
+
+              if (result.status === 'success') {
+                status = 'success';
+                message = `✅ GateKeep sync successful
+                - Operations executed: ${result.operations_executed || 0}
+                - Operations failed: ${result.operations_failed || 0}
+                - Duration: ${result.duration_ms || 0}ms`;
+              } else {
+                status = 'failure';
+                message = `❌ GateKeep sync failed
+                - Operations executed: ${result.operations_executed || 0}
+                - Operations failed: ${result.operations_failed || 0}
+                - Error: ${result.error || 'Unknown error'}`;
+              }
+            } catch (error) {
+              status = 'failure';
+              message = `❌ GateKeep sync failed - Could not parse results: ${error.message}`;
+            }
+
+            core.setOutput('status', message);
+
+            // Create commit status
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: status,
+              context: 'GateKeep Sync',
+              description: message.split('\n')[0].substring(0, 140),
+              target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
+
+            // Post comment on latest commit
+            const commits = await github.rest.repos.listCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              per_page: 1
+            });
+
+            if (commits.data.length > 0) {
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha,
+                body: message
+              });
+            }
+
+      - name: Fail job if sync failed
+        if: steps.sync.outcome == 'failure'
+        run: exit 1
