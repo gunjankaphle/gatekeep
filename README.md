@@ -1,6 +1,6 @@
 # GateKeep
 
-**Scalable, open-source Snowflake permissions management platform - a faster alternative to Permifrost.**
+**Scalable, faster, open-source Snowflake permissions management platform
 
 GateKeep manages Snowflake roles and permissions through declarative YAML configurations, with a focus on **parallelization** and **performance** (5-10x faster than sequential tools).
 
@@ -16,7 +16,7 @@ Learn how to adopt GateKeep in your company with step-by-step instructions, real
 
 ## Features
 
-- 🚀 **5-10x faster** than Permifrost through parallel execution
+- 🚀 **10x faster** through parallel execution
 - 📝 **Declarative YAML** configuration for infrastructure-as-code
 - 🔄 **GitOps workflow** with dry-run previews on PRs
 - 🔍 **Full state reconciliation** - detects and fixes configuration drift
