@@ -1,12 +1,34 @@
 # GateKeep
 
-## Project Status
-- Project In Progress
-- Under active development
-- APIs/CLI are usable but may change
-- Contributions are welcome via issues/PRs
+> ⚠️ **WORK IN PROGRESS** - This project is under active development. Core features are being implemented. APIs and CLI may change.
 
 **Scalable, faster, open-source** Snowflake permissions management platform
+
+## 🚧 Development Status
+
+| Epic | Feature | Status |
+|------|---------|--------|
+| ✅ Epic 1 | Project Foundation | Complete |
+| ✅ Epic 2 | YAML Configuration Parser | Complete |
+| ✅ Epic 3 | Snowflake Integration | Complete |
+| 🚧 Epic 4 | Diff Engine | In Progress |
+| ⏳ Epic 5 | Sync Executor (Parallel) | Planned |
+| ⏳ Epic 6 | PostgreSQL Audit Log | Planned |
+| ⏳ Epic 7 | REST API | Planned |
+| ⏳ Epic 8 | Testing & Documentation | Planned |
+
+**What Works Now:**
+- ✅ YAML config parsing and validation
+- ✅ Snowflake connection and state reading
+- ✅ CLI `validate` command
+
+**Coming Soon:**
+- 🚧 Diff engine and SQL generation
+- 🚧 Parallel sync execution
+- 🚧 Audit logging
+- 🚧 Complete REST API
+
+**Contributions Welcome:** Issues and PRs are appreciated!
 
 GateKeep manages Snowflake roles and permissions through declarative YAML configurations, with a focus on **parallelization** and **performance** (5-10x faster than sequential tools).
 
