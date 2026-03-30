@@ -1,5 +1,11 @@
 # GateKeep
 
+## Project Status
+- Project In Progress
+- Under active development
+- APIs/CLI are usable but may change
+- Contributions are welcome via issues/PRs
+
 **Scalable, faster, open-source** Snowflake permissions management platform
 
 GateKeep manages Snowflake roles and permissions through declarative YAML configurations, with a focus on **parallelization** and **performance** (5-10x faster than sequential tools).
