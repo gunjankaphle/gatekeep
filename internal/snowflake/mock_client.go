@@ -37,3 +37,29 @@ func (m *MockClient) Close() error {
 	}
 	return nil
 }
+
+// MockResult implements sql.Result for testing
+type MockResult struct {
+	AffectedRows int64
+	LastID       int64
+}
+
+// LastInsertId returns the last insert ID
+func (m *MockResult) LastInsertId() (int64, error) {
+	return m.LastID, nil
+}
+
+// RowsAffected returns the number of rows affected
+func (m *MockResult) RowsAffected() (int64, error) {
+	return m.AffectedRows, nil
+}
+
+// MockError implements error for testing
+type MockError struct {
+	Msg string
+}
+
+// Error returns the error message
+func (m *MockError) Error() string {
+	return m.Msg
+}
