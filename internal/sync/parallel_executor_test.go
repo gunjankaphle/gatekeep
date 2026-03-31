@@ -94,10 +94,8 @@ func TestParallelExecutor_Execute_MultipleOperations(t *testing.T) {
 }
 
 func TestParallelExecutor_CircuitBreaker(t *testing.T) {
-	failureCount := 0
 	mockClient := &snowflake.MockClient{
 		ExecFunc: func(query string) (sql.Result, error) {
-			failureCount++
 			// All operations fail to trigger circuit breaker
 			return nil, &snowflake.MockError{Msg: "simulated failure"}
 		},
