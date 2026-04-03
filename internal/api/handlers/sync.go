@@ -2,63 +2,33 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
-
-	"github.com/google/uuid"
-	"github.com/yourusername/gatekeep/internal/sync"
 )
 
 // SyncHandler handles sync requests
-type SyncHandler struct {
-	orchestrator *sync.Orchestrator
-}
+// In read-only mode, write operations return "not implemented"
+type SyncHandler struct{}
 
 // NewSyncHandler creates a new sync handler
-func NewSyncHandler(orchestrator *sync.Orchestrator) *SyncHandler {
-	return &SyncHandler{
-		orchestrator: orchestrator,
-	}
+func NewSyncHandler() *SyncHandler {
+	return &SyncHandler{}
 }
 
 // TriggerSync handles POST /api/sync
+// READ-ONLY MODE: This endpoint is not available
 func (h *SyncHandler) TriggerSync(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ConfigPath string `json:"config_path"`
-		DryRun     bool   `json:"dry_run"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		errorResponse(w, "invalid request body", http.StatusBadRequest, err)
-		return
-	}
-
-	if req.ConfigPath == "" {
-		errorResponse(w, "config_path is required", http.StatusBadRequest, nil)
-		return
-	}
-
-	// Check if config file exists
-	if _, err := os.Stat(req.ConfigPath); os.IsNotExist(err) {
-		errorResponse(w, "config file not found", http.StatusNotFound, err)
-		return
-	}
-
-	// Execute sync (this will be implemented when orchestrator is complete)
-	// For now, return a placeholder response
-	syncID := uuid.New()
-
 	response := map[string]interface{}{
-		"sync_id":             syncID,
-		"status":              "pending",
-		"operations_executed": 0,
-		"operations_failed":   0,
-		"duration_ms":         0,
-		"details_url":         fmt.Sprintf("/api/sync/history/%s", syncID),
+		"error":   "not_implemented",
+		"message": "Sync operations are not available through the API in read-only mode",
+		"details": "Use the CLI for sync operations: gatekeep sync --config <file>",
+		"cli_usage": map[string]string{
+			"sync":    "gatekeep sync --config prod.yaml",
+			"dry-run": "gatekeep sync --config prod.yaml --dry-run",
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
+	w.WriteHeader(http.StatusNotImplemented)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		// Response already written, can only log
 		_ = err
@@ -66,47 +36,20 @@ func (h *SyncHandler) TriggerSync(w http.ResponseWriter, r *http.Request) {
 }
 
 // DryRunSync handles POST /api/sync/dry-run
+// READ-ONLY MODE: This endpoint is not available
 func (h *SyncHandler) DryRunSync(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ConfigPath string `json:"config_path"`
-		DryRun     bool   `json:"dry_run"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		errorResponse(w, "invalid request body", http.StatusBadRequest, err)
-		return
-	}
-
-	if req.ConfigPath == "" {
-		errorResponse(w, "config_path is required", http.StatusBadRequest, nil)
-		return
-	}
-
-	// Check if config file exists
-	if _, err := os.Stat(req.ConfigPath); os.IsNotExist(err) {
-		errorResponse(w, "config file not found", http.StatusNotFound, err)
-		return
-	}
-
-	// Execute dry-run (this will be implemented when orchestrator is complete)
-	// For now, return a placeholder response
 	response := map[string]interface{}{
-		"sync_id":             uuid.New(),
-		"status":              "success",
-		"operations_executed": 0,
-		"operations_failed":   0,
-		"duration_ms":         0,
-		"operations": []map[string]string{
-			{
-				"type":   "PLACEHOLDER",
-				"target": "N/A",
-				"sql":    "-- Dry-run will show SQL statements here",
-				"status": "pending",
-			},
+		"error":   "not_implemented",
+		"message": "Dry-run operations are not available through the API in read-only mode",
+		"details": "Use the CLI for dry-run operations: gatekeep sync --config <file> --dry-run",
+		"cli_usage": map[string]string{
+			"dry-run": "gatekeep sync --config prod.yaml --dry-run",
+			"format":  "gatekeep sync --config prod.yaml --dry-run --format json",
 		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusNotImplemented)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		// Response already written, can only log
 		_ = err
