@@ -19,6 +19,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # LocalStack with Snowflake emulator for testing
+  localstack:
+    image: localstack/snowflake
+    container_name: gatekeep-localstack
+    ports:
+      - "4566:4566"  # LocalStack gateway
+      - "4510-4560:4510-4560"  # Snowflake emulator ports
+    environment:
+      - SERVICES=snowflake
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - ./test/localstack:/etc/localstack/init/ready.d
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   gatekeep-server:
     build: .
     container_name: gatekeep-server

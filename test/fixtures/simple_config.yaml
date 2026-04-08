@@ -1,0 +1,59 @@
+version: 1.0
+
+# Simple test configuration for LocalStack integration tests
+roles:
+  - name: READ_ONLY_ROLE
+    comment: "Base read-only role for analysts"
+
+  - name: ANALYST_ROLE
+    parent_roles:
+      - READ_ONLY_ROLE
+    comment: "Data analysts role with read access"
+
+  - name: ENGINEER_ROLE
+    comment: "Engineering team role with write access"
+
+users:
+  - name: "analyst@example.com"
+    roles:
+      - ANALYST_ROLE
+
+  - name: "engineer@example.com"
+    roles:
+      - ENGINEER_ROLE
+
+databases:
+  - name: TEST_DB
+    schemas:
+      - name: PUBLIC
+        tables:
+          - name: CUSTOMERS
+            grants:
+              - to_role: ANALYST_ROLE
+                privileges:
+                  - SELECT
+
+              - to_role: ENGINEER_ROLE
+                privileges:
+                  - SELECT
+                  - INSERT
+                  - UPDATE
+                  - DELETE
+
+          - name: ORDERS
+            grants:
+              - to_role: ANALYST_ROLE
+                privileges:
+                  - SELECT
+
+warehouses:
+  - name: ANALYTICS_WH
+    grants:
+      - to_role: ANALYST_ROLE
+        privileges:
+          - USAGE
+
+      - to_role: ENGINEER_ROLE
+        privileges:
+          - USAGE
+          - OPERATE

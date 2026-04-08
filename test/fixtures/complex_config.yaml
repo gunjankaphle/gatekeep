@@ -1,0 +1,129 @@
+version: 1.0
+
+# Complex test configuration with role hierarchies and multiple databases
+roles:
+  # Base roles
+  - name: BASE_READ_ROLE
+    comment: "Foundation read-only role"
+
+  - name: BASE_WRITE_ROLE
+    comment: "Foundation write role"
+
+  # Department roles
+  - name: ANALYTICS_VIEWER
+    parent_roles:
+      - BASE_READ_ROLE
+    comment: "Analytics department viewer"
+
+  - name: ANALYTICS_EDITOR
+    parent_roles:
+      - ANALYTICS_VIEWER
+      - BASE_WRITE_ROLE
+    comment: "Analytics department editor"
+
+  - name: DATA_ENGINEER
+    parent_roles:
+      - BASE_WRITE_ROLE
+    comment: "Data engineering role"
+
+  - name: DATA_SCIENTIST
+    parent_roles:
+      - ANALYTICS_VIEWER
+    comment: "Data science team role"
+
+  # Admin roles
+  - name: ANALYTICS_ADMIN
+    parent_roles:
+      - ANALYTICS_EDITOR
+      - DATA_ENGINEER
+    comment: "Analytics administrator"
+
+users:
+  - name: "viewer@example.com"
+    roles:
+      - ANALYTICS_VIEWER
+
+  - name: "editor@example.com"
+    roles:
+      - ANALYTICS_EDITOR
+
+  - name: "engineer@example.com"
+    roles:
+      - DATA_ENGINEER
+
+  - name: "scientist@example.com"
+    roles:
+      - DATA_SCIENTIST
+
+  - name: "admin@example.com"
+    roles:
+      - ANALYTICS_ADMIN
+
+databases:
+  - name: PROD_DB
+    schemas:
+      - name: RAW_DATA
+        tables:
+          - name: EVENTS
+            grants:
+              - to_role: DATA_ENGINEER
+                privileges:
+                  - SELECT
+                  - INSERT
+                  - UPDATE
+
+              - to_role: ANALYTICS_VIEWER
+                privileges:
+                  - SELECT
+
+      - name: ANALYTICS
+        tables:
+          - name: USER_METRICS
+            grants:
+              - to_role: DATA_SCIENTIST
+                privileges:
+                  - SELECT
+
+              - to_role: ANALYTICS_EDITOR
+                privileges:
+                  - SELECT
+                  - INSERT
+                  - UPDATE
+
+          - name: REVENUE_REPORTS
+            grants:
+              - to_role: ANALYTICS_VIEWER
+                privileges:
+                  - SELECT
+
+  - name: DEV_DB
+    schemas:
+      - name: SANDBOX
+        tables:
+          - name: TEST_TABLE
+            grants:
+              - to_role: DATA_ENGINEER
+                privileges:
+                  - SELECT
+                  - INSERT
+                  - UPDATE
+                  - DELETE
+
+warehouses:
+  - name: COMPUTE_WH
+    grants:
+      - to_role: ANALYTICS_VIEWER
+        privileges:
+          - USAGE
+
+      - to_role: DATA_ENGINEER
+        privileges:
+          - USAGE
+          - OPERATE
+          - MODIFY
+
+  - name: ANALYTICS_WH
+    grants:
+      - to_role: DATA_SCIENTIST
+        privileges:
+          - USAGE
