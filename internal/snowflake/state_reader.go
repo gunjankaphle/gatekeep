@@ -3,6 +3,7 @@ package snowflake
 import (
 	"database/sql"
 	"fmt"
+	"sync"
 )
 
 // StateReader reads current state from Snowflake
@@ -212,6 +213,154 @@ func (sr *StateReader) ReadGrants() ([]Grant, error) {
 	// For now, return empty - will be populated when reading role grants
 	// In a full implementation, you would query grants for each role
 	return []Grant{}, nil
+}
+
+// GetAllRolesWithGrants fetches all roles and their grants in parallel
+// This is optimized for large environments with 200+ roles
+func (sr *StateReader) GetAllRolesWithGrants(maxWorkers int) ([]Role, []Grant, error) {
+	// 1. Get all roles first
+	roles, err := sr.ReadRoles()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read roles: %w", err)
+	}
+
+	// 2. Fetch grants for all roles in parallel
+	grants, err := sr.fetchGrantsParallel(roles, maxWorkers)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch grants: %w", err)
+	}
+
+	return roles, grants, nil
+}
+
+// fetchGrantsParallel fetches grants for multiple roles using a worker pool
+func (sr *StateReader) fetchGrantsParallel(roles []Role, maxWorkers int) ([]Grant, error) {
+	if maxWorkers <= 0 {
+		maxWorkers = 10 // Default to 10 concurrent workers
+	}
+
+	// Create channels for work distribution
+	type workItem struct {
+		role Role
+		idx  int
+	}
+	workChan := make(chan workItem, len(roles))
+	resultChan := make(chan []Grant, len(roles))
+	errorChan := make(chan error, len(roles))
+
+	// Create worker pool
+	var wg sync.WaitGroup
+	for i := 0; i < maxWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for work := range workChan {
+				grants, err := sr.fetchGrantsForRole(work.role.Name)
+				if err != nil {
+					errorChan <- fmt.Errorf("failed to fetch grants for role %s: %w", work.role.Name, err)
+					resultChan <- nil
+					continue
+				}
+				resultChan <- grants
+			}
+		}()
+	}
+
+	// Send work to workers
+	for idx, role := range roles {
+		workChan <- workItem{role: role, idx: idx}
+	}
+	close(workChan)
+
+	// Wait for all workers to finish
+	go func() {
+		wg.Wait()
+		close(resultChan)
+		close(errorChan)
+	}()
+
+	// Collect results
+	var allGrants []Grant
+	var errors []error
+
+	for grants := range resultChan {
+		if grants != nil {
+			allGrants = append(allGrants, grants...)
+		}
+	}
+
+	// Collect any errors
+	for err := range errorChan {
+		errors = append(errors, err)
+	}
+
+	// If we have errors, return the first one (but still return partial results)
+	if len(errors) > 0 {
+		return allGrants, errors[0]
+	}
+
+	return allGrants, nil
+}
+
+// fetchGrantsForRole fetches all grants for a specific role
+func (sr *StateReader) fetchGrantsForRole(roleName string) ([]Grant, error) {
+	query := fmt.Sprintf("SHOW GRANTS TO ROLE \"%s\"", roleName)
+	rows, err := sr.client.Query(query)
+	if err != nil {
+		// Some roles might not have grants or permissions issues
+		return []Grant{}, nil
+	}
+	//nolint:errcheck // Deferred close
+	defer func() { _ = rows.Close() }()
+
+	var grants []Grant
+	for rows.Next() {
+		var grant Grant
+		var createdOn, privilege, grantedOn, name, grantedTo, granteeType, grantOption sql.NullString
+
+		// SHOW GRANTS TO ROLE returns: created_on, privilege, granted_on, name, granted_to, grantee_name, grant_option
+		err = rows.Scan(
+			&createdOn,
+			&privilege,
+			&grantedOn,
+			&name,
+			&grantedTo,
+			&granteeType,
+			&grantOption,
+		)
+		if err != nil {
+			// Skip rows that don't match expected schema
+			continue
+		}
+
+		// Build grant object
+		if grantedOn.Valid {
+			grant.GrantedOn = grantedOn.String
+		}
+		if name.Valid {
+			grant.Name = name.String
+		}
+		if privilege.Valid {
+			grant.Privilege = privilege.String
+		}
+		if grantedTo.Valid {
+			grant.GrantedTo = grantedTo.String
+		}
+		if granteeType.Valid {
+			grant.GranteeType = granteeType.String
+		}
+
+		// Set the grantee name to the role we queried
+		grant.GranteeName = roleName
+
+		grants = append(grants, grant)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating grants: %w", err)
+	}
+
+	return grants, nil
 }
 
 // ReadDatabases reads all databases from Snowflake
