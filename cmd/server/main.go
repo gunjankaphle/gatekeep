@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/yourusername/gatekeep/internal/config"
 	"github.com/yourusername/gatekeep/internal/database"
 	"github.com/yourusername/gatekeep/internal/repository"
+	"github.com/yourusername/gatekeep/internal/snowflake"
 )
 
 func main() {
@@ -30,24 +32,64 @@ func main() {
 	configParser := config.NewParser()
 	log.Println("✓ Config parser initialized")
 
-	// Optionally connect to PostgreSQL for audit history
+	// Optionally connect to PostgreSQL for audit history and role/grant cache
 	var auditRepo *repository.AuditRepository
+	var cacheRepo *repository.CacheRepository
 	pgPool, err := database.ConnectPostgres(ctx)
 	if err != nil {
-		log.Printf("⚠ PostgreSQL connection failed: %v - history endpoints will be unavailable", err)
+		log.Printf("⚠ PostgreSQL connection failed: %v - history and cache endpoints will be unavailable", err)
 	} else if pgPool != nil {
 		defer pgPool.Close()
 		auditRepo = repository.NewAuditRepository(pgPool)
-		log.Println("✓ PostgreSQL connected - audit history available")
+		cacheRepo = repository.NewCacheRepository(pgPool)
+		log.Println("✓ PostgreSQL connected - audit history and cache available")
 	} else {
-		log.Println("ℹ PostgreSQL not configured - history endpoints will be unavailable")
+		log.Println("ℹ PostgreSQL not configured - history and cache endpoints will be unavailable")
+	}
+
+	// Initialize Snowflake client (optional, for cache refresh)
+	var sfClient snowflake.Client
+	sfConfig := snowflake.Config{
+		Account:   getEnv("SNOWFLAKE_ACCOUNT", ""),
+		User:      getEnv("SNOWFLAKE_USER", ""),
+		Password:  getEnv("SNOWFLAKE_PASSWORD", ""),
+		Database:  getEnv("SNOWFLAKE_DATABASE", ""),
+		Warehouse: getEnv("SNOWFLAKE_WAREHOUSE", ""),
+		Role:      getEnv("SNOWFLAKE_ROLE", ""),
+	}
+
+	if sfConfig.Account != "" && sfConfig.User != "" && sfConfig.Password != "" {
+		sfClient, err = snowflake.NewClient(sfConfig)
+		if err != nil {
+			log.Printf("⚠ Snowflake connection failed: %v - cache refresh will be unavailable", err)
+		} else {
+			defer func() {
+				if sfClient != nil {
+					_ = sfClient.Close() //nolint:errcheck // best-effort cleanup on shutdown
+				}
+			}()
+			log.Println("✓ Snowflake connected - cache refresh available")
+		}
+	} else {
+		log.Println("ℹ Snowflake not configured - cache refresh will be unavailable")
+	}
+
+	// Parse max workers from environment
+	maxWorkers := 10
+	if workersStr := getEnv("SNOWFLAKE_MAX_CONCURRENT_QUERIES", "10"); workersStr != "" {
+		if w, err := strconv.Atoi(workersStr); err == nil && w > 0 {
+			maxWorkers = w
+		}
 	}
 
 	// Create API router (read-only mode)
 	routerConfig := api.RouterConfig{
-		AuditRepo:    auditRepo,
-		ConfigParser: configParser,
-		ConfigPath:   cfg.ConfigPath,
+		AuditRepo:       auditRepo,
+		CacheRepo:       cacheRepo,
+		ConfigParser:    configParser,
+		ConfigPath:      cfg.ConfigPath,
+		SnowflakeClient: sfClient,
+		MaxWorkers:      maxWorkers,
 	}
 
 	router := api.NewRouter(routerConfig)
@@ -66,11 +108,14 @@ func main() {
 	go func() {
 		log.Printf("✓ GateKeep API server listening on %s:%s", cfg.Host, cfg.Port)
 		log.Printf("  Health check: http://localhost:%s/api/health", cfg.Port)
-		log.Printf("  Roles: http://localhost:%s/api/roles", cfg.Port)
+		log.Printf("  Roles (config): http://localhost:%s/api/roles", cfg.Port)
+		log.Printf("  Roles (cache): http://localhost:%s/api/roles/hierarchy", cfg.Port)
 		log.Printf("  History: http://localhost:%s/api/sync/history", cfg.Port)
 		log.Println()
-		log.Println("📖 Read-only mode: YAML files are the source of truth")
-		log.Println("   Use the CLI for sync operations: gatekeep sync --config <file>")
+		log.Println("📖 API Mode:")
+		log.Println("   - Role hierarchy from Postgres cache")
+		log.Println("   - Sync history from audit logs")
+		log.Println("   - Manual cache refresh via POST /api/roles/refresh")
 		log.Println()
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

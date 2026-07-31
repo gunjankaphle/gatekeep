@@ -11,22 +11,28 @@
 | ✅ Epic 1 | Project Foundation | Complete |
 | ✅ Epic 2 | YAML Configuration Parser | Complete |
 | ✅ Epic 3 | Snowflake Integration | Complete |
-| 🚧 Epic 4 | Diff Engine | In Progress |
-| ⏳ Epic 5 | Sync Executor (Parallel) | Planned |
-| ⏳ Epic 6 | PostgreSQL Audit Log | Planned |
-| ⏳ Epic 7 | REST API | Planned |
-| ⏳ Epic 8 | Testing & Documentation | Planned |
+| ✅ Epic 4 | Diff Engine | Complete |
+| ✅ Epic 5 | Sync Executor (Parallel) | Complete |
+| ✅ Epic 6 | PostgreSQL Audit Log | Complete |
+| ✅ Epic 7 | REST API (read-only) | Complete |
+| ✅ Epic 8 | Integration Tests (Part 1) | Complete |
+| 🚧 — | Roles/Grants Cache Layer | In Progress |
+| 🚧 — | Web UI (React) | In Progress (mock data) |
 
 **What Works Now:**
 - ✅ YAML config parsing and validation
 - ✅ Snowflake connection and state reading
-- ✅ CLI `validate` command
+- ✅ Diff engine and SQL generation
+- ✅ Parallel sync execution (10 workers by default)
+- ✅ Optional PostgreSQL audit logging
+- ✅ Read-only REST API (roles, sync history, health)
+- ✅ Integration test suite with LocalStack Snowflake support
+- ✅ CLI `validate` and `sync` commands
 
 **Coming Soon:**
-- 🚧 Diff engine and SQL generation
-- 🚧 Parallel sync execution
-- 🚧 Audit logging
-- 🚧 Complete REST API
+- 🚧 Postgres-backed roles/grants cache with on-demand Snowflake refresh
+- 🚧 React web UI (log viewer, role hierarchy explorer, permission diff tool) — built against mock data, not yet wired to the live API
+- 🚧 Authentication (JWT)
 
 **Contributions Welcome:** Issues and PRs are appreciated!
 
@@ -57,7 +63,7 @@ Learn how to adopt GateKeep in your company with step-by-step instructions, real
 
 ### Prerequisites
 
-- Go 1.23+ (for development)
+- Go 1.25+ (for development)
 - Docker & Docker Compose (for local development)
 - Snowflake account with ACCOUNTADMIN privileges
 - PostgreSQL 16+ (for audit logging)
@@ -155,10 +161,17 @@ The API will be available at `http://localhost:8080`.
 |--------|----------|-------------|
 | GET | `/api/health` | Health check |
 | GET | `/api/roles` | List roles from config |
+| GET | `/api/roles/hierarchy` | Cached role hierarchy (parent/child relationships) |
+| POST | `/api/roles/refresh` | Trigger a cache refresh from Snowflake |
+| GET | `/api/roles/refresh/status` | Cache refresh status |
+| GET | `/api/roles/:roleName/grants` | Grants for a specific role (from cache) |
+| GET | `/api/roles/compare` | Diff grants between two roles (from cache) |
 | POST | `/api/sync` | Trigger sync |
 | POST | `/api/sync/dry-run` | Dry-run sync |
 | GET | `/api/sync/history` | List sync history |
 | GET | `/api/sync/history/:id` | Sync details |
+
+> The `/api/roles/*` cache endpoints are backed by a new Postgres cache layer (`cached_roles`, `cached_grants`, `cache_metadata` — see `migrations/postgres/002_cache_tables.sql`) that snapshots Snowflake role/grant state so the web UI doesn't hit Snowflake directly on every request. This work is in progress and not yet merged to `main`.
 
 ## GitOps Workflow
 
@@ -353,9 +366,11 @@ Contributions are welcome! Please:
 - [x] Diff engine
 - [x] Parallel sync executor
 - [x] PostgreSQL audit logging
-- [x] REST API
+- [x] REST API (read-only)
 - [x] GitOps workflows
-- [ ] React frontend (Web UI)
+- [x] Integration test suite (LocalStack Snowflake)
+- [ ] Roles/grants Postgres cache layer (in progress)
+- [ ] React frontend (Web UI) — scaffolded with mock data, not yet wired to live API
 - [ ] Authentication (JWT)
 - [ ] Multi-tenant support
 - [ ] Terraform provider
