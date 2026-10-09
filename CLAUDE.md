@@ -42,7 +42,7 @@ FROM golang:1.23-alpine AS builder  # DO NOT pin specific versions
 ```yaml
 ✅ CORRECT:
 - name: Install golangci-lint
-  run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+  run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
 ❌ WRONG:
 - uses: golangci/golangci-lint-action@v3  # May download old pre-built binaries

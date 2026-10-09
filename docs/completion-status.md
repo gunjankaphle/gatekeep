@@ -48,8 +48,8 @@ Follow-up UI and smoke-sync validation:
 ## Remaining release work, in order
 
 1. Add persistent regression coverage for cache rollback, refresh failure and concurrent refresh behavior. Live cache array encoding and hierarchy reads have passed.
-2. Fix or omit the invalid default database in local configuration. Live SHOW output and cache refresh have passed; test a real CLI additive dry-run after wiring the CLI.
-3. Wire `cmd/cli/main.go` sync to the existing orchestrator: it still reports placeholder success and executes no sync or dry-run. Then complete reconciliation in `internal/diff/differ.go`: suppress already-existing object/hierarchy grants and implement role/object grant revocation. Define managed scope before enabling strict mode on a shared account: current strict mode can drop non-system roles omitted from YAML and revoke user assignments outside the configuration.
+2. Fix or omit the invalid default database in local configuration. Live SHOW output and cache refresh have passed; test a real CLI additive dry-run.
+3. CLI sync/dry-run wiring is implemented locally with additive execution, JSON/text output, option validation and nonzero failure exits. Strict execution is disabled. Live additive CLI dry-run has been verified against the isolated smoke-test role. Next complete reconciliation in `internal/diff/differ.go`: suppress already-existing object/hierarchy grants and implement role/object grant revocation. Define managed scope before enabling strict mode on a shared account: current strict mode can drop non-system roles omitted from YAML and revoke user assignments outside the configuration.
 4. Extend generic named-object grants with scoped ALL/FUTURE grants, function signatures and strict reconciliation. Named-object SQL now quotes identifier parts separately; dynamic table/semantic view/warehouse planning and direct-grant idempotency have regression tests. See `docs/object-grants.md`.
 5. Validate sync against an isolated Snowflake sandbox, then verify a second run produces no changes and audit history records results.
 6. Add authentication and access restrictions before exposing the API. Sync API endpoints deliberately return HTTP 501; decide whether writes belong in the first release or remain CLI-only.
@@ -84,3 +84,14 @@ npm run dev
 ```
 
 Open the URL Vite prints and use Roles → Refresh from Snowflake. The refresh reads Snowflake state and writes only the PostgreSQL cache.
+
+
+## CLI follow-up
+
+The CLI now calls the existing orchestrator. It validates YAML before connecting, honors mode/workers/timeout settings and supports `--dry-run`, `--format json`, and additive execution. Dry-run results label SQL operations as `planned`; dry-runs skip audit initialization. Strict execution is rejected pending managed-scope work. Unknown commands/options and execution failures return nonzero exits.
+
+Automated integration tests use simulated Snowflake SQL rows to exercise CLI-to-orchestrator planning/execution and ensure dry-run executes no write SQL. This is not a new live Snowflake execution test.
+
+Git writes and network access are now available. The follow-up branch `feat/cli-sync-lint-v2` was rebased onto merged `origin/main` (`76a6f23`), preserving the local changes. No follow-up commit or push has been performed.
+
+Validation for this follow-up: Go short tests with the race detector, CLI integration tests, golangci-lint and CLI build passed. The built CLI validated the generic-object example and rejected strict execution with structured JSON and exit code 2. The live additive CLI dry-run against `configs/smoke-test.yaml` succeeded with zero planned operations, confirming the existing smoke-test role needs no changes. No new execute-mode request was made. CI and local tooling now use golangci-lint v2 to support current Go export data; the v2 configuration and lint checks pass.

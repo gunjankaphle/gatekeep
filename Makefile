@@ -67,7 +67,7 @@ coverage:
 # Development targets
 lint:
 	@echo "Running linters..."
-	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+	@command -v golangci-lint >/dev/null && golangci-lint version | grep -Eq "version (v)?2\." || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	golangci-lint run --timeout=5m ./...
 	@echo "✓ Linting complete"
 
@@ -103,6 +103,6 @@ docker-down:
 # Tool installation
 install-tools:
 	@echo "Installing development tools..."
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	go install github.com/pressly/goose/v3/cmd/goose@latest
 	@echo "✓ Tools installed"

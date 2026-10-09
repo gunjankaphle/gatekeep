@@ -40,8 +40,9 @@ func Logger(next http.Handler) http.Handler {
 
 		// Log request
 		duration := time.Since(start)
+		//nolint:gosec // %q escapes request-controlled strings, including newlines, preventing log injection.
 		log.Printf(
-			"%s %s %d %s %d bytes",
+			"%q %q %d %s %d bytes",
 			r.Method,
 			r.URL.Path,
 			wrapped.statusCode,
