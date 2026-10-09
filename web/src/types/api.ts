@@ -26,12 +26,9 @@ export interface SyncRun {
 
 export interface SyncHistoryResponse {
   sync_runs: SyncRun[];
-  pagination: {
-    page: number;
-    page_size: number;
-    total_count: number;
-    total_pages: number;
-  };
+  page: number;
+  page_size: number;
+  total_count: number;
 }
 
 export type OperationStatus = 'success' | 'failed' | 'skipped';
@@ -47,15 +44,13 @@ export interface Operation {
   executed_at: string;
 }
 
-export interface SyncDetailsResponse {
-  sync_run: SyncRun;
+export interface SyncDetailsResponse extends SyncRun {
   operations: Operation[];
 }
 
 export interface HealthResponse {
   status: 'healthy' | 'unhealthy' | 'degraded';
-  snowflake_connected: boolean;
-  database_connected: boolean;
+  services: { database: string };
   timestamp: string;
 }
 

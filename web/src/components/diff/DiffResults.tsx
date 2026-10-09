@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -20,7 +22,15 @@ interface DiffResultsProps {
 }
 
 export function DiffResults({ added, removed, unchanged, roleA, roleB }: DiffResultsProps) {
-  const total = added.length + removed.length + unchanged.length;
+  const [objectFilter, setObjectFilter] = useState('');
+  const [objectType, setObjectType] = useState('');
+  const allGrants = [...added, ...removed, ...unchanged];
+  const types = [...new Set(allGrants.map(grant => grant.object_type))].sort();
+  const matches = (grant: Grant) => (!objectType || grant.object_type === objectType) && grant.object_name.toLowerCase().includes(objectFilter.trim().toLowerCase());
+  const filteredAdded = added.filter(matches);
+  const filteredRemoved = removed.filter(matches);
+  const filteredUnchanged = unchanged.filter(matches);
+  const total = filteredAdded.length + filteredRemoved.length + filteredUnchanged.length;
 
   if (!roleA || !roleB) {
     return (
@@ -36,6 +46,18 @@ export function DiffResults({ added, removed, unchanged, roleA, roleB }: DiffRes
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-end gap-4">
+        <label className="min-w-[240px] flex-1 text-sm font-medium text-slate-700">Object name
+          <Input aria-label="Filter by object name" placeholder="Search database, schema, or object…" value={objectFilter} onChange={event => setObjectFilter(event.target.value)} className="mt-1" />
+        </label>
+        <label className="text-sm font-medium text-slate-700">Object type
+          <select aria-label="Filter by object type" value={objectType} onChange={event => setObjectType(event.target.value)} className="mt-1 block rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900">
+            <option value="">All object types</option>
+            {types.map(type => <option key={type} value={type}>{type}</option>)}
+          </select>
+        </label>
+      </div>
+      <p className="text-sm text-slate-500">Showing {total} of {allGrants.length} permissions</p>
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
@@ -45,7 +67,7 @@ export function DiffResults({ added, removed, unchanged, roleA, roleB }: DiffRes
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-600">{added.length}</div>
+            <div className="text-3xl font-bold text-green-600">{filteredAdded.length}</div>
             <p className="text-xs text-slate-500 mt-1">
               Permissions in {roleB} not in {roleA}
             </p>
@@ -60,7 +82,7 @@ export function DiffResults({ added, removed, unchanged, roleA, roleB }: DiffRes
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-red-600">{removed.length}</div>
+            <div className="text-3xl font-bold text-red-600">{filteredRemoved.length}</div>
             <p className="text-xs text-slate-500 mt-1">
               Permissions in {roleA} not in {roleB}
             </p>
@@ -75,7 +97,7 @@ export function DiffResults({ added, removed, unchanged, roleA, roleB }: DiffRes
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-slate-600">{unchanged.length}</div>
+            <div className="text-3xl font-bold text-slate-600">{filteredUnchanged.length}</div>
             <p className="text-xs text-slate-500 mt-1">
               Common permissions
             </p>
@@ -83,6 +105,7 @@ export function DiffResults({ added, removed, unchanged, roleA, roleB }: DiffRes
         </Card>
       </div>
 
+      {total === 0 && <p>No permissions match the selected object filters.</p>}
       {total > 0 && (
         <Card>
           <CardHeader>
@@ -99,7 +122,7 @@ export function DiffResults({ added, removed, unchanged, roleA, roleB }: DiffRes
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {added.map((grant, index) => (
+                {filteredAdded.map((grant, index) => (
                   <TableRow key={`added-${index}`}>
                     <TableCell>
                       <Badge variant="success">
@@ -118,7 +141,7 @@ export function DiffResults({ added, removed, unchanged, roleA, roleB }: DiffRes
                     </TableCell>
                   </TableRow>
                 ))}
-                {removed.map((grant, index) => (
+                {filteredRemoved.map((grant, index) => (
                   <TableRow key={`removed-${index}`}>
                     <TableCell>
                       <Badge variant="error">
@@ -137,7 +160,7 @@ export function DiffResults({ added, removed, unchanged, roleA, roleB }: DiffRes
                     </TableCell>
                   </TableRow>
                 ))}
-                {unchanged.slice(0, 5).map((grant, index) => (
+                {filteredUnchanged.map((grant, index) => (
                   <TableRow key={`unchanged-${index}`}>
                     <TableCell>
                       <Badge variant="outline">
@@ -156,13 +179,7 @@ export function DiffResults({ added, removed, unchanged, roleA, roleB }: DiffRes
                     </TableCell>
                   </TableRow>
                 ))}
-                {unchanged.length > 5 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-sm text-slate-500">
-                      ... and {unchanged.length - 5} more unchanged permissions
-                    </TableCell>
-                  </TableRow>
-                )}
+
               </TableBody>
             </Table>
           </CardContent>

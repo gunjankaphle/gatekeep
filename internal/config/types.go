@@ -2,6 +2,7 @@ package config
 
 // Config represents the complete YAML configuration
 type Config struct {
+	Objects    []Object    `yaml:"objects,omitempty"`
 	Version    string      `yaml:"version" validate:"required"`
 	Roles      []Role      `yaml:"roles,omitempty"`
 	Users      []User      `yaml:"users,omitempty"`
@@ -98,4 +99,12 @@ func ValidSchemaPrivileges() []string {
 		PrivilegeCreateView,
 		PrivilegeUsage,
 	}
+}
+
+// Object declares grants on an existing named Snowflake object.
+// Name contains identifier parts, preserving dots and quotes within each part.
+type Object struct {
+	Type   string   `yaml:"type"`
+	Name   []string `yaml:"name"`
+	Grants []Grant  `yaml:"grants"`
 }

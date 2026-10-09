@@ -1,13 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Activity, CheckCircle, XCircle, Clock, TrendingUp } from 'lucide-react';
-import { mockSyncRuns, getAllMockOperations } from '@/lib/mockData';
+import { useAuditData } from '@/lib/queries';
+import { QueryState } from '@/components/ui/QueryState';
 import { formatRelativeTime, formatDuration, getStatusIcon, calculateSuccessRate } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 
 export function Dashboard() {
-  const allOperations = getAllMockOperations();
-  const recentSyncRuns = mockSyncRuns.slice(0, 5);
+  const query = useAuditData();
+  const allOperations = query.data?.operations ?? [];
+  const syncRuns = query.data?.runs ?? [];
+  const recentSyncRuns = syncRuns.slice(0, 5);
   const recentOperations = allOperations.slice(0, 10);
 
   // Calculate stats
@@ -16,12 +19,14 @@ export function Dashboard() {
   const failedOperations = allOperations.filter((op) => op.status === 'failed').length;
   const successRate = calculateSuccessRate(successfulOperations, totalOperations);
 
+  if (query.isPending || query.isError) return <QueryState pending={query.isPending} error={query.error} />;
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold text-slate-900">Dashboard</h2>
         <p className="mt-2 text-slate-600">
-          Overview of GateKeep sync operations and role management
+          Overview of the latest 100 sync runs
         </p>
       </div>
 
@@ -36,7 +41,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-900">{totalOperations}</div>
-            <p className="mt-1 text-xs text-slate-600">Across {mockSyncRuns.length} sync runs</p>
+            <p className="mt-1 text-xs text-slate-600">Across {syncRuns.length} sync runs</p>
           </CardContent>
         </Card>
 
@@ -63,7 +68,7 @@ export function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{failedOperations}</div>
             <p className="mt-1 text-xs text-slate-600">
-              {((failedOperations / totalOperations) * 100).toFixed(1)}% failure rate
+              {(totalOperations ? (failedOperations / totalOperations) * 100 : 0).toFixed(1)}% failure rate
             </p>
           </CardContent>
         </Card>
@@ -76,12 +81,13 @@ export function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{mockSyncRuns.length}</div>
-            <p className="mt-1 text-xs text-slate-600">Last 30 days</p>
+            <div className="text-2xl font-bold text-slate-900">{syncRuns.length}</div>
+            <p className="mt-1 text-xs text-slate-600">Latest recorded runs</p>
           </CardContent>
         </Card>
       </div>
 
+      {syncRuns.length === 0 && <p>No sync history yet. Run a CLI sync with PostgreSQL audit logging enabled.</p>}
       {/* Recent Sync Runs */}
       <Card>
         <CardHeader>

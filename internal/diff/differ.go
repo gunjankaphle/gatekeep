@@ -41,7 +41,7 @@ func (d *Differ) ComputeDiff(input Input) (*Result, error) {
 	}
 
 	// 3. Diff object grants (permissions on databases, tables, warehouses, etc.)
-	result.ObjectGrantsToAdd = d.diffObjectGrantsToAdd(input.DesiredConfig)
+	result.ObjectGrantsToAdd = missingObjectGrants(d.diffObjectGrantsToAdd(input.DesiredConfig), input.ActualState.Grants)
 	if d.mode == SyncModeStrict {
 		result.ObjectGrantsToRevoke = d.diffObjectGrantsToRevoke(input.DesiredConfig, input.ActualState)
 	}
@@ -152,6 +152,15 @@ func (d *Differ) diffObjectGrantsToAdd(cfg config.Config) []ObjectGrant {
 						})
 					}
 				}
+			}
+		}
+	}
+
+	// Generic grants on existing objects, including multiword Snowflake object types.
+	for _, object := range cfg.Objects {
+		for _, grant := range object.Grants {
+			for _, privilege := range grant.Privileges {
+				toAdd = append(toAdd, ObjectGrant{Privilege: privilege, ObjectType: object.Type, ObjectName: strings.Join(object.Name, "."), NameParts: object.Name, ToRole: grant.ToRole})
 			}
 		}
 	}
@@ -337,4 +346,23 @@ func isSystemRole(roleName string) bool {
 		}
 	}
 	return false
+}
+
+func missingObjectGrants(desired []ObjectGrant, actual []snowflake.Grant) []ObjectGrant {
+	key := func(objectType, name, privilege, role string) [4]string {
+		return [4]string{strings.ReplaceAll(objectType, "_", " "), name, privilege, role}
+	}
+	existing := make(map[[4]string]bool)
+	for _, grant := range actual {
+		existing[key(grant.GrantedOn, grant.Name, grant.Privilege, grant.GranteeName)] = true
+	}
+	result := []ObjectGrant{}
+	for _, grant := range desired {
+		k := key(grant.ObjectType, grant.ObjectName, grant.Privilege, grant.ToRole)
+		if !existing[k] {
+			result = append(result, grant)
+			existing[k] = true
+		}
+	}
+	return result
 }

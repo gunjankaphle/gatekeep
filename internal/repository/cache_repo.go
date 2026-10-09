@@ -7,7 +7,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/lib/pq"
 )
 
 // CacheRepository handles cache operations in Postgres
@@ -56,7 +55,7 @@ func (r *CacheRepository) RefreshCache(ctx context.Context, params CacheRefreshP
 				role := params.Roles[i]
 				return []interface{}{
 					role.Name,
-					pq.Array(role.ParentRoles),
+					role.ParentRoles,
 					role.Comment,
 					role.Owner,
 					time.Now(),
@@ -179,7 +178,7 @@ func (r *CacheRepository) GetRoleHierarchy(ctx context.Context, filter RoleHiera
 
 		err = rows.Scan(
 			&role.Name,
-			pq.Array(&parentRoles),
+			&parentRoles,
 			&role.Comment,
 			&role.Owner,
 			&role.LastUpdated,

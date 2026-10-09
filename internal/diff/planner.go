@@ -188,11 +188,11 @@ func (p *Planner) generateGrantObjects() []SQLOperation {
 	})
 
 	for _, grant := range grants {
-		sql := fmt.Sprintf("GRANT %s ON %s \"%s\" TO ROLE \"%s\"",
+		sql := fmt.Sprintf("GRANT %s ON %s %s TO ROLE %s",
 			grant.Privilege,
 			grant.ObjectType,
-			grant.ObjectName,
-			grant.ToRole,
+			quoteObjectName(grant),
+			quoteSQLIdentifier(grant.ToRole),
 		)
 
 		ops = append(ops, SQLOperation{
@@ -300,11 +300,11 @@ func (p *Planner) generateRevokeObjects() []SQLOperation {
 	})
 
 	for _, revoke := range revokes {
-		sql := fmt.Sprintf("REVOKE %s ON %s \"%s\" FROM ROLE \"%s\"",
+		sql := fmt.Sprintf("REVOKE %s ON %s %s FROM ROLE %s",
 			revoke.Privilege,
 			revoke.ObjectType,
-			revoke.ObjectName,
-			revoke.ToRole,
+			quoteObjectName(revoke),
+			quoteSQLIdentifier(revoke.ToRole),
 		)
 
 		ops = append(ops, SQLOperation{
@@ -417,4 +417,23 @@ func getPhaseForOperation(opType OperationType) string {
 	default:
 		return "OTHER"
 	}
+}
+
+func quoteSQLIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+func quoteObjectName(grant ObjectGrant) string {
+	parts := grant.NameParts
+	if len(parts) == 0 {
+		parts = []string{grant.ObjectName}
+		if grant.ObjectType != "WAREHOUSE" {
+			parts = strings.Split(grant.ObjectName, ".")
+		}
+	}
+	quoted := make([]string, len(parts))
+	for i, part := range parts {
+		quoted[i] = quoteSQLIdentifier(part)
+	}
+	return strings.Join(quoted, ".")
 }

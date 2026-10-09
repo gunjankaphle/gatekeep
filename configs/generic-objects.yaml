@@ -1,0 +1,29 @@
+version: 1.0
+roles:
+  - name: ANALYST_ROLE
+objects:
+  - type: DATABASE
+    name: [ANALYTICS_DB]
+    grants:
+      - to_role: ANALYST_ROLE
+        privileges: [USAGE]
+  - type: SCHEMA
+    name: [ANALYTICS_DB, PUBLIC]
+    grants:
+      - to_role: ANALYST_ROLE
+        privileges: [USAGE]
+  - type: DYNAMIC TABLE
+    name: [ANALYTICS_DB, PUBLIC, DAILY_REVENUE]
+    grants:
+      - to_role: ANALYST_ROLE
+        privileges: [SELECT, MONITOR]
+  - type: SEMANTIC VIEW
+    name: [ANALYTICS_DB, PUBLIC, REVENUE_MODEL]
+    grants:
+      - to_role: ANALYST_ROLE
+        privileges: [SELECT, REFERENCES]
+  - type: WAREHOUSE
+    name: [ANALYTICS_WH]
+    grants:
+      - to_role: ANALYST_ROLE
+        privileges: [USAGE, MONITOR]
