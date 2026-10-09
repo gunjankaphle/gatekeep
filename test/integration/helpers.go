@@ -42,12 +42,12 @@ type testClient struct {
 
 // Query implements Client.Query
 func (tc *testClient) Query(query string) (*sql.Rows, error) {
-	return tc.db.Query(query)
+	return tc.db.QueryContext(context.Background(), query)
 }
 
 // Exec implements Client.Exec
 func (tc *testClient) Exec(query string) (sql.Result, error) {
-	return tc.db.Exec(query)
+	return tc.db.ExecContext(context.Background(), query)
 }
 
 // Close implements Client.Close
@@ -157,7 +157,7 @@ func CleanupUsers(t *testing.T, db *sql.DB, users []string) {
 func GetCurrentRoles(t *testing.T, db *sql.DB) []string {
 	t.Helper()
 
-	rows, err := db.Query("SHOW ROLES")
+	rows, err := db.QueryContext(context.Background(), "SHOW ROLES")
 	if err != nil {
 		t.Fatalf("Failed to show roles: %v", err)
 	}
@@ -183,7 +183,7 @@ func GetCurrentRoles(t *testing.T, db *sql.DB) []string {
 func GetCurrentUsers(t *testing.T, db *sql.DB) []string {
 	t.Helper()
 
-	rows, err := db.Query("SHOW USERS")
+	rows, err := db.QueryContext(context.Background(), "SHOW USERS")
 	if err != nil {
 		t.Fatalf("Failed to show users: %v", err)
 	}

@@ -1,6 +1,7 @@
 package snowflake
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -55,7 +56,7 @@ func NewClient(cfg Config) (Client, error) {
 	db.SetMaxIdleConns(5)
 
 	// Test connection
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(context.Background()); err != nil {
 		//nolint:errcheck // Ignore error on cleanup
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to connect to Snowflake: %w", err)
@@ -66,12 +67,12 @@ func NewClient(cfg Config) (Client, error) {
 
 // Query executes a query that returns rows
 func (c *client) Query(query string) (*sql.Rows, error) {
-	return c.db.Query(query)
+	return c.db.QueryContext(context.Background(), query)
 }
 
 // Exec executes a query that doesn't return rows
 func (c *client) Exec(query string) (sql.Result, error) {
-	return c.db.Exec(query)
+	return c.db.ExecContext(context.Background(), query)
 }
 
 // Close closes the database connection

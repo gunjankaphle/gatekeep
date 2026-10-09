@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -42,7 +43,7 @@ func TestUnavailableDependencies(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			response := httptest.NewRecorder()
-			tc.handler(response, httptest.NewRequest(http.MethodGet, "/", nil))
+			tc.handler(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 			if response.Code != http.StatusServiceUnavailable {
 				t.Fatalf("status %d", response.Code)
 			}

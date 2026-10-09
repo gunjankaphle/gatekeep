@@ -2,7 +2,7 @@
 
 Open-source Snowflake permissions management with declarative YAML, a parallel sync engine, PostgreSQL audit logging, and a React UI for inspecting roles and comparing permissions.
 
-> **Development preview:** local inspection and cache refresh work with a real Snowflake account. The CLI `sync` command is still a placeholder, API sync endpoints are disabled, and authentication and full reconciliation remain unfinished. Evaluate locally before adopting for production permission changes.
+> **Development preview:** local inspection and cache refresh work with a real Snowflake account. The CLI supports additive sync and dry-run; API sync endpoints are disabled, and authentication and full reconciliation remain unfinished. Evaluate locally before adopting for production permission changes.
 
 ## Current capabilities
 
@@ -15,7 +15,7 @@ Open-source Snowflake permissions management with declarative YAML, a parallel s
 | Object-name/type filters and searchable operation logs | Available |
 | Parallel sync orchestrator with optional audit logging | Available internally; isolated role creation and an unchanged second run verified |
 | Generic grants for dynamic tables, semantic views and warehouses | YAML, SQL planning and existing direct-grant detection tested; dynamic-table/semantic-view execution not yet verified live |
-| CLI `sync`, including `--dry-run` | Placeholder; does not execute the orchestrator |
+| CLI `sync`, including `--dry-run` | Wired to orchestrator; additive execution, JSON/text output and failure exit codes |
 | API `/api/sync` and `/api/sync/dry-run` | Return HTTP 501 |
 | Strict reconciliation and authentication | Incomplete |
 
@@ -162,6 +162,20 @@ Validate the example without any database credentials:
 
 Names are lists of exact identifier parts; the planner quotes each part separately. Types and privileges use uppercase SQL keywords. Local validation checks syntax and role references; Snowflake checks whether the object/privilege combination is supported at execution. Include prerequisite access explicitly.
 
+Run a real preview after exporting your Snowflake environment:
+
+```sh
+./bin/gatekeep sync --config configs/generic-objects.yaml --mode additive --dry-run --format json
+```
+
+Apply a reviewed configuration in a sandbox:
+
+```sh
+./bin/gatekeep sync --config your-sandbox.yaml --mode additive
+```
+
+`--workers` and `--timeout` configure concurrency and per-operation execution timeout. Defaults come from `SYNC_WORKERS`, `SYNC_TIMEOUT` and `SYNC_MODE`, falling back to 10 workers, 30 seconds and additive mode. Strict mode is available for dry-runs only; execution is rejected. Dry-runs do not execute planned SQL or write audit history. Exit code 0 means success, 1 means validation/connection/execution/output failure, and 2 means invalid command/options. JSON failures produce a structured failure result after valid option parsing; flag-parser errors go to stderr.
+
 The existing nested table and warehouse syntax remains supported. Generic objects grant access to existing resources; they do not create dynamic tables, semantic views or warehouses. ALL/FUTURE scopes, wildcard discovery, ownership transfer, grant option, function/procedure signatures and database-role recipients are not implemented in this model.
 
 See [object grant documentation](docs/object-grants.md) and [the complete example](configs/generic-objects.yaml).
@@ -184,16 +198,16 @@ Treat configuration as an explicit access contract. Retain the current permissio
 
 Before using GateKeep as an operational replacement, complete and verify:
 
-- CLI sync/dry-run wiring to the internal orchestrator, including meaningful exit codes and machine-readable output.
+- Verify the wired CLI and audit records against your sandbox, including meaningful failure exit codes and machine-readable output.
 - Authentication and authorization for any remotely accessible API.
 - A defined managed scope for reconciliation, with tests covering additions, revocations and preservation of unrelated access.
 - Live grant tests for the Snowflake object types and privilege combinations your organization uses.
 
-The current strict-mode differ can select non-system roles omitted from YAML for deletion and user role assignments outside the configuration for revocation; object and hierarchy revocation are still incomplete. Do not treat strict mode as ready for a shared account. `SYNC_MODE` in `.env` is not sufficient to configure the placeholder CLI.
+The current strict-mode differ can select non-system roles omitted from YAML for deletion and user role assignments outside the configuration for revocation; object and hierarchy revocation are still incomplete. Do not treat strict mode as ready for a shared account. The CLI honors `SYNC_MODE`, but rejects strict execution; use `--mode additive` to override an older environment setting.
 
 ### 4. Prove writes in an isolated sandbox
 
-Once the CLI is wired, start with additive mode and review a real dry-run. Test only dedicated roles and resources. Execute the reviewed plan, verify Snowflake state and audit records, then run it again and confirm zero changes. Test a deliberate failure and recovery before increasing scope.
+Start with additive mode and review a real dry-run. Test only dedicated roles and resources. Execute the reviewed plan, verify Snowflake state and audit records, then run it again and confirm zero changes. Test a deliberate failure and recovery before increasing scope.
 
 An internal orchestrator smoke test has created one isolated role and verified a zero-change second run. That does not establish complete reconciliation or live coverage for every object type.
 
@@ -201,7 +215,7 @@ An internal orchestrator smoke test has created one isolated role and verified a
 
 After those gates pass, expand team by team. Keep configurations in Git, require review for permission changes, store credentials in your secret manager, and retain audit history in PostgreSQL. Establish a recovery procedure before introducing revocations.
 
-[Preview](.github/workflows/gatekeep-preview.yml) and [sync](.github/workflows/gatekeep-sync.yml) workflow scaffolds exist, but currently call the placeholder CLI and pin an older Go version than this project requires. They need updating and validation before use; a successful scaffold run is not evidence of a Snowflake change.
+[Preview](.github/workflows/gatekeep-preview.yml) and [sync](.github/workflows/gatekeep-sync.yml) workflow scaffolds exist, but pin an older Go version than this project requires. They need updating and validation before use; a successful scaffold run is not evidence of a Snowflake change.
 
 ## API endpoints
 
@@ -221,6 +235,8 @@ After those gates pass, expand team by team. Keep configurations in Git, require
 
 ## Development
 
+Go linting uses golangci-lint v2 with the version-2 configuration. `make install-tools` installs it from source using the current Go toolchain; `make lint` upgrades an older v1 installation.
+
 ```sh
 make build
 make test
@@ -239,7 +255,7 @@ Browser tests use API fixtures. Short Go tests skip database-dependent integrati
 ## Project structure
 
 ```text
-cmd/cli/                 CLI scaffold and YAML validation
+cmd/cli/                 CLI sync, dry-run and YAML validation
 cmd/server/              API server
 internal/config/         YAML models and validation
 internal/snowflake/      Connection and state readers
@@ -254,7 +270,7 @@ configs/                 Configuration examples
 
 ## Contributing and roadmap
 
-Contributions are welcome. Priorities are CLI integration, scoped reconciliation, ALL/FUTURE grants, live coverage for more object types, authentication, and production frontend hosting. Run the relevant Go/frontend checks with your changes and describe what you verified in your pull request.
+Contributions are welcome. Priorities are sandbox CLI validation, scoped reconciliation, ALL/FUTURE grants, live coverage for more object types, authentication, and production frontend hosting. Run the relevant Go/frontend checks with your changes and describe what you verified in your pull request.
 
 Older [getting-started notes](docs/getting-started.md) describe the intended end-to-end workflow; use this README and [completion status](docs/completion-status.md) for current availability.
 

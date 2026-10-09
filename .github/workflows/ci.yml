@@ -20,12 +20,18 @@ jobs:
           go-version: 'stable'
           cache: true
 
+      - name: Download project dependencies
+        run: go mod download
+
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
       - name: Run golangci-lint
         run: |
+          go version
+          golangci-lint version
+          golangci-lint config verify
           golangci-lint run --timeout=5m
 
   test:
