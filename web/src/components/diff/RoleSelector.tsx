@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeftRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -20,17 +19,13 @@ export function RoleSelector({
   onSwap,
 }: RoleSelectorProps) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Compare Roles</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div>
+    <div className="flex flex-wrap items-end gap-4 rounded-lg border border-slate-200 bg-white p-4">
+          <div className="min-w-[240px] flex-1">
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Role A
             </label>
             <select
+              aria-label="Role A"
               value={roleA}
               onChange={(e) => onRoleAChange(e.target.value)}
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
@@ -48,6 +43,7 @@ export function RoleSelector({
             <Button
               variant="outline"
               size="icon"
+              aria-label="Swap roles"
               onClick={onSwap}
               disabled={!roleA || !roleB}
             >
@@ -55,11 +51,12 @@ export function RoleSelector({
             </Button>
           </div>
 
-          <div>
+          <div className="min-w-[240px] flex-1">
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Role B
             </label>
             <select
+              aria-label="Role B"
               value={roleB}
               onChange={(e) => onRoleBChange(e.target.value)}
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
@@ -72,8 +69,6 @@ export function RoleSelector({
               ))}
             </select>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }

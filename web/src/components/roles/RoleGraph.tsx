@@ -21,13 +21,12 @@ interface RoleGraphProps {
   onRoleClick: (role: Role) => void;
 }
 
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
-
 const nodeWidth = 200;
 const nodeHeight = 80;
 
 const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({ rankdir: 'TB', ranksep: 100, nodesep: 80 });
 
   nodes.forEach((node) => {
@@ -107,10 +106,10 @@ export function RoleGraph({ roles, onRoleClick }: RoleGraphProps) {
         id: role.name,
         data: {
           label: (
-            <div className="text-center">
-              <div className="font-semibold text-sm">{role.name}</div>
+            <div className="min-w-0 w-full text-center">
+              <div className="font-semibold text-sm truncate" title={role.name}>{role.name}</div>
               {role.comment && (
-                <div className="text-xs text-gray-600 mt-1 truncate max-w-[180px]">
+                <div className="text-xs text-gray-600 mt-1 truncate w-full" title={role.comment}>
                   {role.comment}
                 </div>
               )}

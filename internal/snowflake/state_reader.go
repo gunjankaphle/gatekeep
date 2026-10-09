@@ -3,6 +3,7 @@ package snowflake
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -60,163 +61,52 @@ func (sr *StateReader) ReadState() (*State, error) {
 
 // ReadRoles reads all roles from Snowflake
 func (sr *StateReader) ReadRoles() ([]Role, error) {
-	query := "SHOW ROLES"
-	rows, err := sr.client.Query(query)
+	rows, err := sr.queryRows("SHOW ROLES")
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return nil, err
 	}
-	//nolint:errcheck // Deferred close
-	defer func() { _ = rows.Close() }()
-
-	var roles []Role
-	for rows.Next() {
-		var role Role
-		var createdOn, owner sql.NullString
-		var assignedToUsers, grantedToRoles, grantedRoles sql.NullInt64
-
-		// SHOW ROLES returns: created_on, name, is_default, is_current, is_inherited, assigned_to_users, granted_to_roles, granted_roles, owner, comment
-		scanErr := rows.Scan(
-			&createdOn,
-			&role.Name,
-			&sql.NullBool{}, // is_default
-			&sql.NullBool{}, // is_current
-			&sql.NullBool{}, // is_inherited
-			&assignedToUsers,
-			&grantedToRoles,
-			&grantedRoles,
-			&owner,
-			&role.Comment,
-		)
-		if scanErr != nil {
-			return nil, fmt.Errorf("failed to scan role: %w", scanErr)
-		}
-
-		if owner.Valid {
-			role.Owner = owner.String
-		}
-
-		roles = append(roles, role)
+	roles := make([]Role, 0, len(rows))
+	for _, row := range rows {
+		roles = append(roles, Role{Name: row["name"], Comment: row["comment"], Owner: row["owner"]})
 	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating roles: %w", err)
-	}
-
 	return roles, nil
 }
 
-// ReadUsers reads all users and their assigned roles
+// ReadUsers reads users and their assigned roles, propagating query failures.
 func (sr *StateReader) ReadUsers() ([]User, error) {
-	query := "SHOW USERS"
-	rows, err := sr.client.Query(query)
+	rows, err := sr.queryRows("SHOW USERS")
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return nil, err
 	}
-	//nolint:errcheck // Deferred close
-	defer func() { _ = rows.Close() }()
-
-	userMap := make(map[string]*User)
-	for rows.Next() {
-		var name, loginName, displayName, defaultRole, defaultNamespace, defaultWarehouse sql.NullString
-		var createdOn, hasPassword, hasRsaPublicKey, disabled, comment, owner sql.NullString
-		var lastSuccessLogin, expiresAt, lockedUntil, extAuthnDuo, extAuthnUID, bypassMfaUntil sql.NullString
-		var snowflakeLock sql.NullBool
-
-		// SHOW USERS returns many columns, we only need name
-		err := rows.Scan(
-			&name,
-			&createdOn,
-			&loginName,
-			&displayName,
-			&sql.NullString{}, // first_name
-			&sql.NullString{}, // last_name
-			&sql.NullString{}, // email
-			&sql.NullString{}, // mins_to_unlock
-			&sql.NullString{}, // days_to_expiry
-			&comment,
-			&disabled,
-			&sql.NullBool{}, // must_change_password
-			&snowflakeLock,
-			&defaultWarehouse,
-			&defaultNamespace,
-			&defaultRole,
-			&sql.NullString{}, // default_secondary_roles
-			&extAuthnDuo,
-			&extAuthnUID,
-			&bypassMfaUntil,
-			&lastSuccessLogin,
-			&expiresAt,
-			&lockedUntil,
-			&hasPassword,
-			&hasRsaPublicKey,
-			&sql.NullString{}, // email_verified
-			&owner,
-		)
+	users := make([]User, 0, len(rows))
+	for _, row := range rows {
+		user := User{Name: row["name"], Roles: []string{}}
+		grants, err := sr.queryRows("SHOW GRANTS TO USER " + quoteIdentifier(user.Name))
 		if err != nil {
-			// Try simpler scan if columns don't match (Snowflake version differences)
-			continue
+			return nil, fmt.Errorf("failed to read user grants: %w", err)
 		}
-
-		if name.Valid {
-			userMap[name.String] = &User{
-				Name:  name.String,
-				Roles: []string{},
+		for _, grant := range grants {
+			if grant["role"] != "" {
+				user.Roles = append(user.Roles, grant["role"])
+			} else if grant["granted_on"] == "ROLE" {
+				user.Roles = append(user.Roles, grant["name"])
 			}
 		}
+		users = append(users, user)
 	}
-
-	// Read role grants for each user
-	for userName := range userMap {
-		query := fmt.Sprintf("SHOW GRANTS TO USER \"%s\"", userName)
-		roleRows, err := sr.client.Query(query)
-		if err != nil {
-			// User might not exist or no permissions, skip
-			continue
-		}
-
-		for roleRows.Next() {
-			var createdOn, privilege, grantedOn, name, grantedTo, granteeType, grantOption sql.NullString
-
-			err := roleRows.Scan(
-				&createdOn,
-				&privilege,
-				&grantedOn,
-				&name,
-				&grantedTo,
-				&granteeType,
-				&grantOption,
-			)
-			if err != nil {
-				continue
-			}
-
-			// Add role to user if it's a role grant
-			if grantedOn.Valid && grantedOn.String == "ROLE" && name.Valid {
-				userMap[userName].Roles = append(userMap[userName].Roles, name.String)
-			}
-		}
-		//nolint:errcheck // Cleanup
-		_ = roleRows.Close()
-	}
-
-	// Convert map to slice
-	var users []User
-	for _, user := range userMap {
-		users = append(users, *user)
-	}
-
 	return users, nil
 }
 
-// ReadGrants reads all grants from Snowflake
+// ReadGrants reads current grants for all visible roles.
 func (sr *StateReader) ReadGrants() ([]Grant, error) {
-	// For now, return empty - will be populated when reading role grants
-	// In a full implementation, you would query grants for each role
-	return []Grant{}, nil
+	roles, err := sr.ReadRoles()
+	if err != nil {
+		return nil, err
+	}
+	return sr.fetchGrantsParallel(roles, 10)
 }
 
-// GetAllRolesWithGrants fetches all roles and their grants in parallel
-// This is optimized for large environments with 200+ roles
+// GetAllRolesWithGrants fetches roles and their grants with bounded concurrency.
 func (sr *StateReader) GetAllRolesWithGrants(maxWorkers int) ([]Role, []Grant, error) {
 	// 1. Get all roles first
 	roles, err := sr.ReadRoles()
@@ -304,166 +194,71 @@ func (sr *StateReader) fetchGrantsParallel(roles []Role, maxWorkers int) ([]Gran
 
 // fetchGrantsForRole fetches all grants for a specific role
 func (sr *StateReader) fetchGrantsForRole(roleName string) ([]Grant, error) {
-	query := fmt.Sprintf("SHOW GRANTS TO ROLE \"%s\"", roleName)
-	rows, err := sr.client.Query(query)
+	rows, err := sr.queryRows("SHOW GRANTS TO ROLE " + quoteIdentifier(roleName))
 	if err != nil {
-		// Some roles might not have grants or permissions issues
-		return []Grant{}, nil
+		return nil, err
 	}
-	//nolint:errcheck // Deferred close
-	defer func() { _ = rows.Close() }()
-
-	var grants []Grant
-	for rows.Next() {
-		var grant Grant
-		var createdOn, privilege, grantedOn, name, grantedTo, granteeType, grantOption sql.NullString
-
-		// SHOW GRANTS TO ROLE returns: created_on, privilege, granted_on, name, granted_to, grantee_name, grant_option
-		err = rows.Scan(
-			&createdOn,
-			&privilege,
-			&grantedOn,
-			&name,
-			&grantedTo,
-			&granteeType,
-			&grantOption,
-		)
-		if err != nil {
-			// Skip rows that don't match expected schema
-			continue
-		}
-
-		// Build grant object
-		if grantedOn.Valid {
-			grant.GrantedOn = grantedOn.String
-		}
-		if name.Valid {
-			grant.Name = name.String
-		}
-		if privilege.Valid {
-			grant.Privilege = privilege.String
-		}
-		if grantedTo.Valid {
-			grant.GrantedTo = grantedTo.String
-		}
-		if granteeType.Valid {
-			grant.GranteeType = granteeType.String
-		}
-
-		// Set the grantee name to the role we queried
-		grant.GranteeName = roleName
-
-		grants = append(grants, grant)
+	grants := make([]Grant, 0, len(rows))
+	for _, row := range rows {
+		grants = append(grants, Grant{GrantedOn: row["granted_on"], GrantedTo: row["granted_to"], Name: row["name"], Privilege: row["privilege"], GranteeType: row["granted_to"], GranteeName: roleName})
 	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating grants: %w", err)
-	}
-
 	return grants, nil
 }
 
-// ReadDatabases reads all databases from Snowflake
+// ReadDatabases reads visible databases.
 func (sr *StateReader) ReadDatabases() ([]Database, error) {
-	query := "SHOW DATABASES"
-	rows, err := sr.client.Query(query)
+	rows, err := sr.queryRows("SHOW DATABASES")
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return nil, err
 	}
-	//nolint:errcheck // Deferred close
-	defer func() { _ = rows.Close() }()
-
-	var databases []Database
-	for rows.Next() {
-		var db Database
-		var createdOn, owner, comment, options, retentionTime sql.NullString
-
-		err := rows.Scan(
-			&createdOn,
-			&db.Name,
-			&sql.NullBool{},   // is_default
-			&sql.NullBool{},   // is_current
-			&sql.NullString{}, // origin
-			&owner,
-			&comment,
-			&options,
-			&retentionTime,
-		)
-		if err != nil {
-			continue
-		}
-
-		databases = append(databases, db)
+	result := make([]Database, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, Database{Name: row["name"]})
 	}
-
-	return databases, nil
+	return result, nil
 }
 
-// ReadWarehouses reads all warehouses from Snowflake
+// ReadWarehouses reads visible warehouses.
 func (sr *StateReader) ReadWarehouses() ([]Warehouse, error) {
-	query := "SHOW WAREHOUSES"
+	rows, err := sr.queryRows("SHOW WAREHOUSES")
+	if err != nil {
+		return nil, err
+	}
+	result := make([]Warehouse, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, Warehouse{Name: row["name"]})
+	}
+	return result, nil
+}
+
+func quoteIdentifier(name string) string { return `"` + strings.ReplaceAll(name, `"`, `""`) + `"` }
+
+// SHOW output can gain columns. Read by column name rather than a fixed position count.
+func (sr *StateReader) queryRows(query string) ([]map[string]string, error) {
 	rows, err := sr.client.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return nil, fmt.Errorf("query %s: %w", query, err)
 	}
-	//nolint:errcheck // Deferred close
-	defer func() { _ = rows.Close() }()
-
-	var warehouses []Warehouse
+	defer func() { _ = rows.Close() }() //nolint:errcheck // best-effort cleanup; rows.Err reports iteration errors
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	result := []map[string]string{}
 	for rows.Next() {
-		var wh Warehouse
-		// SHOW WAREHOUSES has many columns, we just need name
-		var dummy sql.NullString
-		var dummyInt sql.NullInt64
-		var dummyBool sql.NullBool
-
-		err := rows.Scan(
-			&wh.Name,
-			&dummy,     // state
-			&dummy,     // type
-			&dummy,     // size
-			&dummyInt,  // min_cluster_count
-			&dummyInt,  // max_cluster_count
-			&dummyInt,  // started_clusters
-			&dummyInt,  // running
-			&dummyInt,  // queued
-			&dummyBool, // is_default
-			&dummyBool, // is_current
-			&dummyBool, // auto_suspend
-			&dummyInt,  // auto_resume
-			&dummy,     // available
-			&dummy,     // provisioning
-			&dummy,     // quiescing
-			&dummy,     // other
-			&dummy,     // created_on
-			&dummy,     // resumed_on
-			&dummy,     // updated_on
-			&dummy,     // owner
-			&dummy,     // comment
-			&dummy,     // enable_query_acceleration
-			&dummy,     // query_acceleration_max_scale_factor
-			&dummy,     // resource_monitor
-			&dummy,     // actives
-			&dummy,     // pendings
-			&dummy,     // failed
-			&dummy,     // suspended
-			&dummy,     // uuid
-		)
-		if err != nil {
-			// Try simpler scan
-			var name sql.NullString
-			if scanErr := rows.Scan(&name); scanErr != nil {
-				continue
-			}
-			if name.Valid {
-				wh.Name = name.String
-			} else {
-				continue
-			}
+		values := make([]sql.NullString, len(columns))
+		targets := make([]interface{}, len(columns))
+		for i := range values {
+			targets[i] = &values[i]
 		}
-
-		warehouses = append(warehouses, wh)
+		if err := rows.Scan(targets...); err != nil {
+			return nil, fmt.Errorf("scan %s: %w", query, err)
+		}
+		row := make(map[string]string, len(columns))
+		for i, column := range columns {
+			row[strings.ToLower(column)] = values[i].String
+		}
+		result = append(result, row)
 	}
-
-	return warehouses, nil
+	return result, rows.Err()
 }

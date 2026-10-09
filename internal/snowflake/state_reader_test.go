@@ -64,13 +64,9 @@ func TestStateReader_Methods(t *testing.T) {
 	})
 
 	t.Run("ReadGrants", func(t *testing.T) {
-		grants, err := sr.ReadGrants()
-		// ReadGrants currently returns empty, no error
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if grants == nil {
-			t.Error("Expected non-nil grants slice")
+		_, err := sr.ReadGrants()
+		if err == nil {
+			t.Error("Expected query failure to propagate")
 		}
 	})
 

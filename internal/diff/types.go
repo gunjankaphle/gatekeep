@@ -54,11 +54,12 @@ type RoleGrant struct {
 
 // ObjectGrant represents a privilege granted on an object to a role
 type ObjectGrant struct {
-	Privilege   string // SELECT, INSERT, USAGE, etc.
-	ObjectType  string // TABLE, DATABASE, SCHEMA, WAREHOUSE, etc.
-	ObjectName  string // Fully qualified name (e.g., "DB.SCHEMA.TABLE")
-	ToRole      string // Role receiving the grant
-	GrantOption bool   // Can this role grant to others?
+	NameParts   []string // Explicit identifier parts for generic object grants
+	Privilege   string   // SELECT, INSERT, USAGE, etc.
+	ObjectType  string   // TABLE, DATABASE, SCHEMA, WAREHOUSE, etc.
+	ObjectName  string   // Fully qualified name (e.g., "DB.SCHEMA.TABLE")
+	ToRole      string   // Role receiving the grant
+	GrantOption bool     // Can this role grant to others?
 }
 
 // UserRoleGrant represents a role granted to a user

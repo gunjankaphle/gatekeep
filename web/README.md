@@ -1,3 +1,5 @@
+> Updated 2026-10-08: the application screens now use the live API. Start the backend and configure PostgreSQL for history/cache; Snowflake is needed to refresh the cache. See [completion status](../docs/completion-status.md) for setup and remaining work. `npm test` runs browser tests against API fixtures. Older mock-data descriptions below describe the original scaffold.
+
 # GateKeep Web UI
 
 A modern, read-only web interface for GateKeep - Snowflake permission management tool.

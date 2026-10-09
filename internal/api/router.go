@@ -39,7 +39,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	// Initialize cache handler if cache repo is provided
 	var rolesCacheHandler *handlers.RolesCacheHandler
-	if cfg.CacheRepo != nil && cfg.SnowflakeClient != nil {
+	if cfg.CacheRepo != nil {
 		rolesCacheHandler = handlers.NewRolesCacheHandler(cfg.CacheRepo, cfg.SnowflakeClient, cfg.MaxWorkers)
 	}
 

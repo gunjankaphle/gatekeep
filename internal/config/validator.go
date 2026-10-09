@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -52,7 +53,7 @@ func (v *Validator) Validate(config *Config) error {
 		return err
 	}
 
-	return nil
+	return v.validateObjects(config.Objects, roleMap)
 }
 
 // validateRoleHierarchy validates role parent references and detects cycles
@@ -261,5 +262,41 @@ func (v *Validator) validateGrants(grants []Grant, roleMap map[string]bool, vali
 		}
 	}
 
+	return nil
+}
+
+// SQLKeywords validates keyword-only fragments; object names are quoted separately.
+var SQLKeywords = regexp.MustCompile(`^[A-Z][A-Z0-9_]*( [A-Z][A-Z0-9_]*){0,3}$`)
+
+func (v *Validator) validateObjects(objects []Object, roles map[string]bool) error {
+	for _, object := range objects {
+		if !SQLKeywords.MatchString(object.Type) {
+			return fmt.Errorf("invalid object type: %q; use uppercase SQL keywords", object.Type)
+		}
+		if len(object.Name) < 1 || len(object.Name) > 3 {
+			return fmt.Errorf("object %s name requires 1 to 3 identifier parts", object.Type)
+		}
+		for _, part := range object.Name {
+			if strings.TrimSpace(part) == "" || strings.ContainsRune(part, 0) {
+				return fmt.Errorf("object name contains an empty or invalid identifier")
+			}
+		}
+		if len(object.Grants) == 0 {
+			return fmt.Errorf("object %s requires grants", object.Type)
+		}
+		for _, grant := range object.Grants {
+			if !roles[grant.ToRole] {
+				return fmt.Errorf("object grant references non-existent role: %s", grant.ToRole)
+			}
+			if len(grant.Privileges) == 0 {
+				return fmt.Errorf("object grant requires privileges")
+			}
+			for _, privilege := range grant.Privileges {
+				if !SQLKeywords.MatchString(privilege) || privilege == "OWNERSHIP" || privilege == "ALL" || privilege == "ALL PRIVILEGES" {
+					return fmt.Errorf("invalid or unsupported privilege: %q; list individual privileges; ownership transfers require separate support", privilege)
+				}
+			}
+		}
+	}
 	return nil
 }

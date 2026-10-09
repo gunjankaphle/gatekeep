@@ -3,8 +3,8 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -126,6 +126,10 @@ func (h *RolesCacheHandler) GetRoleHierarchy(w http.ResponseWriter, r *http.Requ
 
 // TriggerRefresh handles POST /api/roles/refresh
 func (h *RolesCacheHandler) TriggerRefresh(w http.ResponseWriter, r *http.Request) {
+	if h.snowflakeClient == nil {
+		errorResponse(w, "Snowflake is not configured; cache refresh unavailable", http.StatusServiceUnavailable, nil)
+		return
+	}
 	// Guard against concurrent refreshes within this process; the cache_metadata
 	// row alone isn't enough since two requests could both read it before either
 	// writes 'refreshing'.
@@ -314,6 +318,15 @@ func (h *RolesCacheHandler) refreshCache(ctx context.Context) {
 		}
 	}
 
+	// The existing UI uses parent_roles for the roles inherited by each role.
+	for i := range cachedRoles {
+		for _, grant := range cachedGrants {
+			if grant.GrantedOn == "ROLE" && grant.RoleName == cachedRoles[i].Name {
+				cachedRoles[i].ParentRoles = append(cachedRoles[i].ParentRoles, grant.ObjectName)
+			}
+		}
+	}
+
 	// Update cache in transaction
 	params := repository.CacheRefreshParams{
 		Roles:  cachedRoles,
@@ -335,21 +348,21 @@ func (h *RolesCacheHandler) refreshCache(ctx context.Context) {
 // computeGrantsDiff computes the difference between two sets of grants
 func computeGrantsDiff(grantsA, grantsB []repository.CachedGrant) map[string]interface{} {
 	// Create maps for fast lookup
-	mapA := make(map[string]repository.CachedGrant)
-	mapB := make(map[string]repository.CachedGrant)
+	mapA := make(map[[3]string]repository.CachedGrant)
+	mapB := make(map[[3]string]repository.CachedGrant)
 
 	for _, grant := range grantsA {
-		key := fmt.Sprintf("%s:%s:%s:%s", grant.GrantedOn, grant.ObjectName, grant.Privilege, grant.GranteeName)
+		key := [3]string{grant.GrantedOn, grant.ObjectName, grant.Privilege}
 		mapA[key] = grant
 	}
 
 	for _, grant := range grantsB {
-		key := fmt.Sprintf("%s:%s:%s:%s", grant.GrantedOn, grant.ObjectName, grant.Privilege, grant.GranteeName)
+		key := [3]string{grant.GrantedOn, grant.ObjectName, grant.Privilege}
 		mapB[key] = grant
 	}
 
 	// Compute diff
-	var added, removed, unchanged []map[string]string
+	added, removed, unchanged := []map[string]string{}, []map[string]string{}, []map[string]string{}
 
 	// Find added (in B but not in A)
 	for key, grant := range mapB {
@@ -382,6 +395,16 @@ func computeGrantsDiff(grantsA, grantsB []repository.CachedGrant) map[string]int
 		}
 	}
 
+	for _, entries := range [][]map[string]string{added, removed, unchanged} {
+		sort.Slice(entries, func(i, j int) bool {
+			for _, field := range []string{"granted_on", "object_name", "privilege"} {
+				if entries[i][field] != entries[j][field] {
+					return entries[i][field] < entries[j][field]
+				}
+			}
+			return false
+		})
+	}
 	return map[string]interface{}{
 		"added":     added,
 		"removed":   removed,

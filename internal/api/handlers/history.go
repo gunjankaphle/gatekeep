@@ -25,6 +25,10 @@ func NewHistoryHandler(auditRepo *repository.AuditRepository) *HistoryHandler {
 
 // ListHistory handles GET /api/sync/history
 func (h *HistoryHandler) ListHistory(w http.ResponseWriter, r *http.Request) {
+	if h.auditRepo == nil {
+		errorResponse(w, "PostgreSQL is not configured; audit history unavailable", http.StatusServiceUnavailable, nil)
+		return
+	}
 	// Parse query parameters
 	pageStr := r.URL.Query().Get("page")
 	pageSizeStr := r.URL.Query().Get("page_size")
@@ -105,6 +109,10 @@ func (h *HistoryHandler) ListHistory(w http.ResponseWriter, r *http.Request) {
 
 // GetSyncRunDetail handles GET /api/sync/history/:id
 func (h *HistoryHandler) GetSyncRunDetail(w http.ResponseWriter, r *http.Request) {
+	if h.auditRepo == nil {
+		errorResponse(w, "PostgreSQL is not configured; audit history unavailable", http.StatusServiceUnavailable, nil)
+		return
+	}
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {

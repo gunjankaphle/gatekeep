@@ -1,0 +1,4 @@
+version: 1.0
+roles:
+  - name: GATEKEEP_SMOKE_TEST_20261008
+    comment: "Isolated role for GateKeep sync validation"

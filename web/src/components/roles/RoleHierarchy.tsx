@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { useRoles } from '@/lib/queries';
+import { QueryState } from '@/components/ui/QueryState';
 import { RoleGraph } from './RoleGraph';
 import { RoleTreeView } from './RoleTreeView';
 import { RoleDetails } from './RoleDetails';
@@ -6,19 +10,17 @@ import { Button } from '@/components/ui/button';
 import type { Role } from '@/types';
 import { Network, List } from 'lucide-react';
 
-// Mock roles for demonstration
-const mockRoles: Role[] = [
-  { name: 'READ_ONLY', parent_roles: [], comment: 'Read-only access to production' },
-  { name: 'ANALYST_ROLE', parent_roles: ['READ_ONLY'], comment: 'Data analysts with read access' },
-  { name: 'ENGINEER_ROLE', parent_roles: ['ANALYST_ROLE'], comment: 'Engineers with write access' },
-  { name: 'DATA_SCIENTIST_ROLE', parent_roles: ['ANALYST_ROLE'], comment: 'Data scientists with ML access' },
-  { name: 'DATA_ENGINEER_ROLE', parent_roles: ['ENGINEER_ROLE'], comment: 'Data engineers for ETL pipelines' },
-  { name: 'ADMIN_ROLE', parent_roles: ['ENGINEER_ROLE', 'DATA_SCIENTIST_ROLE'], comment: 'System administrators' },
-  { name: 'DBA_ROLE', parent_roles: ['ADMIN_ROLE'], comment: 'Database administrators' },
-  { name: 'SECURITY_ADMIN', parent_roles: ['DBA_ROLE'], comment: 'Security administrators' },
-];
-
 export function RoleHierarchy() {
+  const query = useRoles();
+  const client = useQueryClient();
+  const status = useQuery({ queryKey: ['refresh-status'], queryFn: () => api.getRefreshStatus(), refetchInterval: 2000 });
+  useEffect(() => {
+    if (status.data?.status === 'success') void client.invalidateQueries({ queryKey: ['roles'] });
+  }, [client, status.data?.status, status.data?.last_refresh]);
+  const refresh = useMutation({ mutationFn: () => api.refreshRoles(), onSuccess: () => {
+    void client.invalidateQueries({ queryKey: ['refresh-status'] });
+  } });
+  const roles = query.data ?? [];
   const [view, setView] = useState<'graph' | 'tree'>('graph');
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
 
@@ -49,12 +51,19 @@ export function RoleHierarchy() {
         </div>
       </div>
 
+      <div className="flex items-center gap-3">
+        <Button onClick={() => refresh.mutate()} disabled={refresh.isPending || status.data?.status === 'refreshing'}>Refresh from Snowflake</Button>
+        <span>{status.data?.status}{status.data?.last_refresh ? ` · ${new Date(status.data.last_refresh).toLocaleString()}` : ''}</span>
+      </div>
+      {(refresh.error || status.error || status.data?.error_message) && <p role="alert">{refresh.error?.message ?? status.error?.message ?? status.data?.error_message}</p>}
+      {(query.isPending || query.isError) && <QueryState pending={query.isPending} error={query.error} />}
+      {!query.isPending && !query.isError && roles.length === 0 && <p>No cached roles yet. Refresh from Snowflake to load them.</p>}
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2">
           {view === 'graph' ? (
-            <RoleGraph roles={mockRoles} onRoleClick={setSelectedRole} />
+            <RoleGraph roles={roles} onRoleClick={setSelectedRole} />
           ) : (
-            <RoleTreeView roles={mockRoles} onRoleClick={setSelectedRole} />
+            <RoleTreeView roles={roles} onRoleClick={setSelectedRole} />
           )}
         </div>
         <div className="col-span-1">
