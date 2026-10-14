@@ -94,6 +94,8 @@ func TestOrchestrator_Sync_StateReaderError(t *testing.T) {
 
 	testConfig := `
 version: "1.0"
+managed:
+  roles: [TEST_ROLE]
 roles:
   - name: TEST_ROLE
 `

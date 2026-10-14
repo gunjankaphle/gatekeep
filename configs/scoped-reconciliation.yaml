@@ -1,0 +1,18 @@
+# Example only: replace names with your isolated sandbox's roles and objects.
+version: "1.0"
+managed:
+  roles: [TEAM_READER, TEAM_PARENT]
+  objects:
+    - type: WAREHOUSE
+      name: [TEAM_WH]
+      privileges: [USAGE, MONITOR]
+roles:
+  - name: TEAM_READER
+    parent_roles: [TEAM_PARENT]
+  - name: TEAM_PARENT
+objects:
+  - type: WAREHOUSE
+    name: [TEAM_WH]
+    grants:
+      - to_role: TEAM_READER
+        privileges: [USAGE]

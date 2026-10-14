@@ -2,12 +2,13 @@ package config
 
 // Config represents the complete YAML configuration
 type Config struct {
-	Objects    []Object    `yaml:"objects,omitempty"`
-	Version    string      `yaml:"version" validate:"required"`
-	Roles      []Role      `yaml:"roles,omitempty"`
-	Users      []User      `yaml:"users,omitempty"`
-	Databases  []Database  `yaml:"databases,omitempty"`
-	Warehouses []Warehouse `yaml:"warehouses,omitempty"`
+	Managed    *ManagedScope `yaml:"managed,omitempty"`
+	Objects    []Object      `yaml:"objects,omitempty"`
+	Version    string        `yaml:"version" validate:"required"`
+	Roles      []Role        `yaml:"roles,omitempty"`
+	Users      []User        `yaml:"users,omitempty"`
+	Databases  []Database    `yaml:"databases,omitempty"`
+	Warehouses []Warehouse   `yaml:"warehouses,omitempty"`
 }
 
 // Role represents a Snowflake role
@@ -107,4 +108,19 @@ type Object struct {
 	Type   string   `yaml:"type"`
 	Name   []string `yaml:"name"`
 	Grants []Grant  `yaml:"grants"`
+}
+
+// ManagedScope explicitly limits permissions that strict mode may revoke.
+// It never authorizes resource deletion.
+type ManagedScope struct {
+	Roles   []string        `yaml:"roles,omitempty"`
+	Users   []string        `yaml:"users,omitempty"`
+	Objects []ManagedObject `yaml:"objects,omitempty"`
+}
+
+// ManagedObject limits revocations to exact named objects and privileges.
+type ManagedObject struct {
+	Type       string   `yaml:"type"`
+	Name       []string `yaml:"name"`
+	Privileges []string `yaml:"privileges"`
 }

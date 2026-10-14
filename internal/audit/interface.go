@@ -32,6 +32,9 @@ type AuditLogger interface {
 	// RecordOperationFailure marks an operation as failed with an error
 	RecordOperationFailure(ctx context.Context, opID int64, errorMsg string, executionTimeMs int) error
 
+	// RecordOperationSkipped records an operation stopped by an earlier failure.
+	RecordOperationSkipped(ctx context.Context, opID int64, reason string) error
+
 	// GetSyncHistory retrieves recent sync runs
 	GetSyncHistory(ctx context.Context, limit int) ([]*repository.SyncRun, error)
 

@@ -21,6 +21,17 @@ func NewDiffer(mode SyncMode) *Differ {
 // ComputeDiff compares desired config vs actual Snowflake state
 func (d *Differ) ComputeDiff(input Input) (*Result, error) {
 	result := &Result{}
+	if d.mode != SyncModeAdditive && d.mode != SyncModeStrict {
+		return nil, fmt.Errorf("unknown sync mode: %s", d.mode)
+	}
+	if d.mode == SyncModeStrict {
+		if input.DesiredConfig.Managed == nil {
+			return nil, fmt.Errorf("strict mode requires an explicit managed scope")
+		}
+		if err := config.ValidateManagedScope(input.DesiredConfig.Managed); err != nil {
+			return nil, err
+		}
+	}
 
 	// Build lookup maps for actual state
 	actualRoles := buildRoleMap(input.ActualState.Roles)
@@ -30,20 +41,18 @@ func (d *Differ) ComputeDiff(input Input) (*Result, error) {
 
 	// 1. Diff roles
 	result.RolesToCreate = d.diffRolesToCreate(input.DesiredConfig.Roles, actualRoles)
-	if d.mode == SyncModeStrict {
-		result.RolesToDelete = d.diffRolesToDelete(input.DesiredConfig.Roles, actualRoles)
-	}
+	// Strict mode reconciles permissions only; omitted roles are never dropped.
 
 	// 2. Diff role hierarchies (parent role grants)
-	result.RoleGrantsToAdd = d.diffRoleGrantsToAdd(input.DesiredConfig.Roles, actualRoles)
+	result.RoleGrantsToAdd = d.diffRoleGrantsToAdd(input.DesiredConfig.Roles, input.ActualState.Grants)
 	if d.mode == SyncModeStrict {
-		result.RoleGrantsToRevoke = d.diffRoleGrantsToRevoke(input.DesiredConfig.Roles)
+		result.RoleGrantsToRevoke = scopedRoleRevocations(input.DesiredConfig, input.ActualState.Grants)
 	}
 
 	// 3. Diff object grants (permissions on databases, tables, warehouses, etc.)
 	result.ObjectGrantsToAdd = missingObjectGrants(d.diffObjectGrantsToAdd(input.DesiredConfig), input.ActualState.Grants)
 	if d.mode == SyncModeStrict {
-		result.ObjectGrantsToRevoke = d.diffObjectGrantsToRevoke(input.DesiredConfig, input.ActualState)
+		result.ObjectGrantsToRevoke = scopedObjectRevocations(input.DesiredConfig, input.ActualState.Grants, d.diffObjectGrantsToAdd(input.DesiredConfig))
 	}
 
 	// 4. Diff users
@@ -52,7 +61,7 @@ func (d *Differ) ComputeDiff(input Input) (*Result, error) {
 	// 5. Diff user role assignments
 	result.UserRoleGrantsToAdd = d.diffUserRoleGrantsToAdd(input.DesiredConfig.Users, actualUsers)
 	if d.mode == SyncModeStrict {
-		result.UserRoleGrantsToRevoke = d.diffUserRoleGrantsToRevoke(input.DesiredConfig.Users, actualUsers)
+		result.UserRoleGrantsToRevoke = scopedUserRevocations(input.DesiredConfig, input.ActualState.Users)
 	}
 
 	// 6. Diff databases and warehouses
@@ -76,62 +85,20 @@ func (d *Differ) diffRolesToCreate(desiredRoles []config.Role, actualRoles map[s
 	return toCreate
 }
 
-// diffRolesToDelete finds roles that exist in actual but not in desired
-func (d *Differ) diffRolesToDelete(desiredRoles []config.Role, actualRoles map[string]snowflake.Role) []string {
-	desiredMap := make(map[string]bool)
+// diffRoleGrantsToAdd compares direct hierarchy grants and deduplicates desired edges.
+func (d *Differ) diffRoleGrantsToAdd(desiredRoles []config.Role, actual []snowflake.Grant) []RoleGrant {
+	existing := roleEdges(actual)
+	var result []RoleGrant
 	for _, role := range desiredRoles {
-		desiredMap[role.Name] = true
-	}
-
-	var toDelete []string
-	for roleName := range actualRoles {
-		// Skip system roles
-		if isSystemRole(roleName) {
-			continue
-		}
-		if !desiredMap[roleName] {
-			toDelete = append(toDelete, roleName)
-		}
-	}
-	return toDelete
-}
-
-// diffRoleGrantsToAdd finds role hierarchy grants to add
-func (d *Differ) diffRoleGrantsToAdd(desiredRoles []config.Role, actualRoles map[string]snowflake.Role) []RoleGrant {
-	var toAdd []RoleGrant
-
-	for _, role := range desiredRoles {
-		for _, parentRole := range role.ParentRoles {
-			// Check if this grant already exists in actual state
-			if !roleGrantExists(role.Name, parentRole, actualRoles) {
-				toAdd = append(toAdd, RoleGrant{
-					Role:   role.Name,
-					ToRole: parentRole,
-				})
+		for _, parent := range role.ParentRoles {
+			edge := [2]string{role.Name, parent}
+			if !existing[edge] {
+				result = append(result, RoleGrant{Role: role.Name, ToRole: parent})
+				existing[edge] = true
 			}
 		}
 	}
-
-	return toAdd
-}
-
-// diffRoleGrantsToRevoke finds role hierarchy grants to revoke
-//
-//nolint:unparam // Placeholder - will be implemented when ReadGrants (VAR-13) is complete
-func (d *Differ) diffRoleGrantsToRevoke(desiredRoles []config.Role) []RoleGrant {
-	// Build map of desired role grants
-	desiredGrants := make(map[string]map[string]bool) // role -> parent roles
-	for _, role := range desiredRoles {
-		desiredGrants[role.Name] = make(map[string]bool)
-		for _, parent := range role.ParentRoles {
-			desiredGrants[role.Name][parent] = true
-		}
-	}
-
-	var toRevoke []RoleGrant
-	// This would require actual grant data from Snowflake
-	// For now, return empty (will be implemented when ReadGrants is complete)
-	return toRevoke
+	return result
 }
 
 // diffObjectGrantsToAdd finds object grants (permissions) to add
@@ -182,13 +149,6 @@ func (d *Differ) diffObjectGrantsToAdd(cfg config.Config) []ObjectGrant {
 	return toAdd
 }
 
-// diffObjectGrantsToRevoke finds object grants to revoke
-func (d *Differ) diffObjectGrantsToRevoke(cfg config.Config, actual snowflake.State) []ObjectGrant {
-	// This requires ReadGrants() to be implemented
-	// For now, return empty
-	return []ObjectGrant{}
-}
-
 // diffUsersToCreate finds users that exist in desired but not in actual
 func (d *Differ) diffUsersToCreate(desiredUsers []config.User, actualUsers map[string]snowflake.User) []string {
 	var toCreate []string
@@ -205,66 +165,24 @@ func (d *Differ) diffUserRoleGrantsToAdd(desiredUsers []config.User, actualUsers
 	var toAdd []UserRoleGrant
 
 	for _, user := range desiredUsers {
-		actualUser, exists := actualUsers[user.Name]
-		var actualRoles map[string]bool
-		if exists {
-			actualRoles = make(map[string]bool)
-			for _, role := range actualUser.Roles {
-				actualRoles[role] = true
-			}
+		actualUser := actualUsers[user.Name]
+		actualRoles := make(map[string]bool)
+		for _, role := range actualUser.Roles {
+			actualRoles[role] = true
 		}
 
 		for _, role := range user.Roles {
-			if !exists || !actualRoles[role] {
+			if !actualRoles[role] {
 				toAdd = append(toAdd, UserRoleGrant{
 					Role:   role,
 					ToUser: user.Name,
 				})
+				actualRoles[role] = true
 			}
 		}
 	}
 
 	return toAdd
-}
-
-// diffUserRoleGrantsToRevoke finds user role grants to revoke
-func (d *Differ) diffUserRoleGrantsToRevoke(desiredUsers []config.User, actualUsers map[string]snowflake.User) []UserRoleGrant {
-	// Build map of desired user role grants
-	desiredUserRoles := make(map[string]map[string]bool) // user -> roles
-	for _, user := range desiredUsers {
-		desiredUserRoles[user.Name] = make(map[string]bool)
-		for _, role := range user.Roles {
-			desiredUserRoles[user.Name][role] = true
-		}
-	}
-
-	var toRevoke []UserRoleGrant
-	for userName, actualUser := range actualUsers {
-		desiredRoles, userInConfig := desiredUserRoles[userName]
-		if !userInConfig {
-			// User not in config - revoke all roles in strict mode
-			for _, role := range actualUser.Roles {
-				if !isSystemRole(role) {
-					toRevoke = append(toRevoke, UserRoleGrant{
-						Role:   role,
-						ToUser: userName,
-					})
-				}
-			}
-		} else {
-			// User in config - revoke roles not in desired state
-			for _, role := range actualUser.Roles {
-				if !desiredRoles[role] && !isSystemRole(role) {
-					toRevoke = append(toRevoke, UserRoleGrant{
-						Role:   role,
-						ToUser: userName,
-					})
-				}
-			}
-		}
-	}
-
-	return toRevoke
 }
 
 // diffDatabasesToCreate finds databases to create
@@ -323,37 +241,17 @@ func buildWarehouseMap(warehouses []snowflake.Warehouse) map[string]snowflake.Wa
 	return m
 }
 
-func roleGrantExists(role, parentRole string, actualRoles map[string]snowflake.Role) bool {
-	// This would require grant data from Snowflake
-	// For now, assume it doesn't exist (always add)
-	// Will be properly implemented when ReadGrants is complete
-	return false
-}
-
-func isSystemRole(roleName string) bool {
-	systemRoles := []string{
-		"ACCOUNTADMIN",
-		"SECURITYADMIN",
-		"SYSADMIN",
-		"USERADMIN",
-		"PUBLIC",
-		"ORGADMIN",
-	}
-	upper := strings.ToUpper(roleName)
-	for _, sys := range systemRoles {
-		if upper == sys {
-			return true
-		}
-	}
-	return false
-}
+func isSystemRole(roleName string) bool { return config.IsSystemRole(roleName) }
 
 func missingObjectGrants(desired []ObjectGrant, actual []snowflake.Grant) []ObjectGrant {
 	key := func(objectType, name, privilege, role string) [4]string {
-		return [4]string{strings.ReplaceAll(objectType, "_", " "), name, privilege, role}
+		return [4]string{normalizeObjectType(objectType), name, privilege, role}
 	}
 	existing := make(map[[4]string]bool)
 	for _, grant := range actual {
+		if !isRoleRecipient(grant) {
+			continue
+		}
 		existing[key(grant.GrantedOn, grant.Name, grant.Privilege, grant.GranteeName)] = true
 	}
 	result := []ObjectGrant{}

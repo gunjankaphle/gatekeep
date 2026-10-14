@@ -3,7 +3,11 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
+	"time"
+
+	"github.com/DATA-DOG/go-sqlmock"
 )
 
 func TestExecutor_Execute_Success(t *testing.T) {
@@ -134,5 +138,43 @@ func TestExecutor_Validate(t *testing.T) {
 	err = executor.Validate("")
 	if err == nil {
 		t.Error("expected error for empty SQL")
+	}
+}
+
+func TestExecutorHonorsDriverDeadline(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }() //nolint:errcheck // test cleanup
+	mock.ExpectExec("GRANT USAGE").WillDelayFor(100 * time.Millisecond).WillReturnResult(sqlmock.NewResult(0, 1))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	result := NewExecutor(&client{db: db}).Execute(ctx, "GRANT USAGE")
+	if result.Success || result.Error == nil {
+		t.Fatalf("SQL outlived its deadline and reported success: %+v", result)
+	}
+	if ctx.Err() != context.DeadlineExceeded {
+		t.Fatalf("operation did not reach its deadline: %v", ctx.Err())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExecutorRejectsAlreadyCancelledContext(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }() //nolint:errcheck // test cleanup
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	result := NewExecutor(&client{db: db}).Execute(ctx, "REVOKE USAGE")
+	if result.Success || !errors.Is(result.Error, context.Canceled) {
+		t.Fatalf("cancelled context not respected: %+v", result)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

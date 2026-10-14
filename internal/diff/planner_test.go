@@ -334,7 +334,7 @@ func TestPlanner_GeneratePlan_CorrectOrdering(t *testing.T) {
 
 func TestPlanner_GeneratePlan_SystemRoles_NotDeleted(t *testing.T) {
 	diff := &Result{
-		RolesToDelete: []string{"ACCOUNTADMIN", "CUSTOM_ROLE", "PUBLIC"},
+		RolesToDelete: []string{"ACCOUNTADMIN", "GLOBALORGADMIN", "CUSTOM_ROLE", "PUBLIC"},
 	}
 	diff.ComputeSummary()
 

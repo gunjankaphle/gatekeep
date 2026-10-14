@@ -218,3 +218,8 @@ func getEnv(key, defaultValue string) string {
 	}
 	return defaultValue
 }
+
+// ExecContext carries deadlines to the integration SQL driver.
+func (tc *testClient) ExecContext(ctx context.Context, query string) (sql.Result, error) {
+	return tc.db.ExecContext(ctx, query)
+}

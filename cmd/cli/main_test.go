@@ -113,3 +113,37 @@ func TestUnknownCommand(t *testing.T) {
 		t.Fatal("unknown command succeeded")
 	}
 }
+
+func TestStrictRequiresScopeBeforeConnecting(t *testing.T) {
+	path := testConfig(t)
+	for _, dry := range []bool{false, true} {
+		args := []string{"sync", "--config", path, "--mode", "strict", "--format", "json"}
+		if dry {
+			args = append(args, "--dry-run")
+		}
+		var out, errOut bytes.Buffer
+		code := run(context.Background(), args, &out, &errOut, func(context.Context, syncOptions) (*gatesync.Result, error) {
+			t.Fatal("connected without scope")
+			return nil, nil
+		})
+		if code != 2 {
+			t.Fatalf("expected usage error: %d %s", code, out.String())
+		}
+	}
+}
+
+func TestStrictTypoRejectedBeforeConnecting(t *testing.T) {
+	path := testConfig(t)
+	data := []byte("version: '1.0'\nmanaged:\n  roles: [CHILD, PARENT]\nroles:\n  - name: CHILD\n    parent_role: [PARENT]\n  - name: PARENT\n")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code := run(context.Background(), []string{"sync", "--config", path, "--mode", "strict", "--format", "json"}, &out, &errOut, func(context.Context, syncOptions) (*gatesync.Result, error) {
+		t.Fatal("connected with misspelled desired field")
+		return nil, nil
+	})
+	if code != 1 {
+		t.Fatalf("exit %d: %s %s", code, out.String(), errOut.String())
+	}
+}
