@@ -9,7 +9,7 @@ import (
 type SyncMode string
 
 const (
-	// SyncModeStrict removes resources not in YAML (full reconciliation)
+	// SyncModeStrict reconciles permissions inside an explicit managed scope
 	SyncModeStrict SyncMode = "strict"
 	// SyncModeAdditive only adds resources, never removes (append-only)
 	SyncModeAdditive SyncMode = "additive"

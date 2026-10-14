@@ -100,7 +100,7 @@ func runSync(ctx context.Context, args []string, stdout, stderr io.Writer, runne
 	path := flags.String("config", "", "Path to YAML configuration (required)")
 	dry := flags.Bool("dry-run", false, "Preview SQL without executing or writing audit records")
 	format := flags.String("format", "text", "Output format: text or json")
-	mode := flags.String("mode", envDefault("SYNC_MODE", "additive"), "Reconciliation mode: additive or strict (strict is dry-run only)")
+	mode := flags.String("mode", envDefault("SYNC_MODE", "additive"), "Reconciliation mode: additive or strict (requires managed scope)")
 	workers := flags.String("workers", envDefault("SYNC_WORKERS", "10"), "Parallel worker count")
 	timeout := flags.String("timeout", envDefault("SYNC_TIMEOUT", "30s"), "Timeout per executed operation")
 	if err := flags.Parse(args); err != nil {
@@ -149,9 +149,6 @@ func runSync(ctx context.Context, args []string, stdout, stderr io.Writer, runne
 	if *mode != "additive" && *mode != "strict" {
 		return finish("mode must be additive or strict", 2)
 	}
-	if *mode == "strict" && !*dry {
-		return finish("strict execution is unavailable until managed scope and revocation are complete; use additive mode or --dry-run", 2)
-	}
 	count, err := strconv.Atoi(*workers)
 	if err != nil || count < 1 || count > 100 {
 		return finish("workers must be an integer from 1 to 100", 2)
@@ -161,8 +158,12 @@ func runSync(ctx context.Context, args []string, stdout, stderr io.Writer, runne
 		return finish("timeout must be a positive duration", 2)
 	}
 	// Validate before opening connections or starting audit records.
-	if _, validationErr := config.NewParser().ParseFile(*path); validationErr != nil {
+	cfg, validationErr := config.NewParser().ParseFile(*path)
+	if validationErr != nil {
 		return finish(validationErr.Error(), 1)
+	}
+	if *mode == "strict" && cfg.Managed == nil {
+		return finish("strict mode requires an explicit managed scope", 2)
 	}
 	execution := gatesync.DefaultConfig()
 	execution.Workers = count

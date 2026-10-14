@@ -12,7 +12,7 @@ func TestDiffer_ComputeDiff_EmptyStates(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
 	input := Input{
-		DesiredConfig: config.Config{},
+		DesiredConfig: config.Config{Managed: &config.ManagedScope{Roles: []string{"ENGINEER_ROLE"}}},
 		ActualState:   snowflake.State{},
 		Mode:          SyncModeStrict,
 	}
@@ -35,7 +35,7 @@ func TestDiffer_ComputeDiff_CreateRoles(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
 	input := Input{
-		DesiredConfig: config.Config{
+		DesiredConfig: config.Config{Managed: &config.ManagedScope{Roles: []string{"ENGINEER_ROLE"}},
 			Version: "1.0",
 			Roles: []config.Role{
 				{Name: "ANALYST_ROLE"},
@@ -78,36 +78,16 @@ func TestDiffer_ComputeDiff_CreateRoles(t *testing.T) {
 	}
 }
 
-func TestDiffer_ComputeDiff_DeleteRoles_StrictMode(t *testing.T) {
-	differ := NewDiffer(SyncModeStrict)
-
-	input := Input{
-		DesiredConfig: config.Config{
-			Version: "1.0",
-			Roles: []config.Role{
-				{Name: "KEPT_ROLE"},
-			},
-		},
-		ActualState: snowflake.State{
-			Roles: []snowflake.Role{
-				{Name: "KEPT_ROLE"},
-				{Name: "REMOVED_ROLE"},
-			},
-		},
-		Mode: SyncModeStrict,
-	}
-
-	result, err := differ.ComputeDiff(input)
+func TestDiffer_ComputeDiff_StrictNeverDropsOmittedRoles(t *testing.T) {
+	result, err := NewDiffer(SyncModeStrict).ComputeDiff(Input{
+		DesiredConfig: config.Config{Managed: &config.ManagedScope{Roles: []string{"REMOVED_ROLE"}}, Roles: []config.Role{{Name: "KEPT_ROLE"}}},
+		ActualState:   snowflake.State{Roles: []snowflake.Role{{Name: "KEPT_ROLE"}, {Name: "REMOVED_ROLE"}, {Name: "UNMANAGED_ROLE"}, {Name: "ACCOUNTADMIN"}}},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatal(err)
 	}
-
-	if len(result.RolesToDelete) != 1 {
-		t.Errorf("expected 1 role to delete, got %d", len(result.RolesToDelete))
-	}
-
-	if result.RolesToDelete[0] != "REMOVED_ROLE" {
-		t.Errorf("expected REMOVED_ROLE to be deleted, got %s", result.RolesToDelete[0])
+	if len(result.RolesToDelete) != 0 {
+		t.Fatalf("strict mode must never drop roles: %v", result.RolesToDelete)
 	}
 }
 
@@ -115,7 +95,7 @@ func TestDiffer_ComputeDiff_DeleteRoles_AdditiveMode(t *testing.T) {
 	differ := NewDiffer(SyncModeAdditive)
 
 	input := Input{
-		DesiredConfig: config.Config{
+		DesiredConfig: config.Config{Managed: &config.ManagedScope{Roles: []string{"ENGINEER_ROLE"}},
 			Version: "1.0",
 			Roles: []config.Role{
 				{Name: "KEPT_ROLE"},
@@ -144,7 +124,7 @@ func TestDiffer_ComputeDiff_RoleHierarchy(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
 	input := Input{
-		DesiredConfig: config.Config{
+		DesiredConfig: config.Config{Managed: &config.ManagedScope{Roles: []string{"ENGINEER_ROLE"}},
 			Version: "1.0",
 			Roles: []config.Role{
 				{
@@ -181,7 +161,7 @@ func TestDiffer_ComputeDiff_ObjectGrants(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
 	input := Input{
-		DesiredConfig: config.Config{
+		DesiredConfig: config.Config{Managed: &config.ManagedScope{Roles: []string{"ENGINEER_ROLE"}},
 			Version: "1.0",
 			Databases: []config.Database{
 				{
@@ -253,7 +233,7 @@ func TestDiffer_ComputeDiff_Users(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
 	input := Input{
-		DesiredConfig: config.Config{
+		DesiredConfig: config.Config{Managed: &config.ManagedScope{Roles: []string{"ENGINEER_ROLE"}},
 			Version: "1.0",
 			Users: []config.User{
 				{
@@ -295,7 +275,7 @@ func TestDiffer_ComputeDiff_UserRoleRevoke_StrictMode(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
 	input := Input{
-		DesiredConfig: config.Config{
+		DesiredConfig: config.Config{Managed: &config.ManagedScope{Roles: []string{"ENGINEER_ROLE"}, Users: []string{"john.doe@company.com"}},
 			Version: "1.0",
 			Users: []config.User{
 				{
@@ -331,45 +311,11 @@ func TestDiffer_ComputeDiff_UserRoleRevoke_StrictMode(t *testing.T) {
 	}
 }
 
-func TestDiffer_ComputeDiff_SystemRoles_NotDeleted(t *testing.T) {
-	differ := NewDiffer(SyncModeStrict)
-
-	input := Input{
-		DesiredConfig: config.Config{
-			Version: "1.0",
-			Roles:   []config.Role{},
-		},
-		ActualState: snowflake.State{
-			Roles: []snowflake.Role{
-				{Name: "ACCOUNTADMIN"},
-				{Name: "SYSADMIN"},
-				{Name: "PUBLIC"},
-				{Name: "CUSTOM_ROLE"},
-			},
-		},
-		Mode: SyncModeStrict,
-	}
-
-	result, err := differ.ComputeDiff(input)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Should only delete CUSTOM_ROLE, not system roles
-	if len(result.RolesToDelete) != 1 {
-		t.Errorf("expected 1 role to delete, got %d", len(result.RolesToDelete))
-	}
-
-	if result.RolesToDelete[0] != "CUSTOM_ROLE" {
-		t.Errorf("expected CUSTOM_ROLE to be deleted, got %s", result.RolesToDelete[0])
-	}
-}
-
 func TestDiffer_ComputeDiff_ComplexScenario(t *testing.T) {
 	differ := NewDiffer(SyncModeStrict)
 
 	input := Input{
-		DesiredConfig: config.Config{
+		DesiredConfig: config.Config{Managed: &config.ManagedScope{Roles: []string{"ENGINEER_ROLE"}},
 			Version: "1.0",
 			Roles: []config.Role{
 				{Name: "DATA_READER"},
@@ -422,8 +368,8 @@ func TestDiffer_ComputeDiff_ComplexScenario(t *testing.T) {
 		t.Errorf("expected 1 role created, got %d", result.Summary.RolesCreated)
 	}
 
-	if result.Summary.RolesDeleted != 1 { // OLD_ROLE
-		t.Errorf("expected 1 role deleted, got %d", result.Summary.RolesDeleted)
+	if result.Summary.RolesDeleted != 0 { // Omitted roles are preserved.
+		t.Errorf("expected 0 roles deleted, got %d", result.Summary.RolesDeleted)
 	}
 
 	if result.Summary.UsersCreated != 1 { // engineer@company.com

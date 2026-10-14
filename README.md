@@ -2,7 +2,7 @@
 
 Open-source Snowflake permissions management with declarative YAML, a parallel sync engine, PostgreSQL audit logging, and a React UI for inspecting roles and comparing permissions.
 
-> **Development preview:** local inspection and cache refresh work with a real Snowflake account. The CLI supports additive sync and dry-run; API sync endpoints are disabled, and authentication and full reconciliation remain unfinished. Evaluate locally before adopting for production permission changes.
+> **Development preview:** local inspection and cache refresh work with a real Snowflake account. The CLI supports additive sync, scoped strict permission reconciliation and dry-run; API sync endpoints are disabled, and authentication and broader grant models remain unfinished. Evaluate locally before adopting for production permission changes.
 
 ## Current capabilities
 
@@ -15,9 +15,10 @@ Open-source Snowflake permissions management with declarative YAML, a parallel s
 | Object-name/type filters and searchable operation logs | Available |
 | Parallel sync orchestrator with optional audit logging | Available internally; isolated role creation and an unchanged second run verified |
 | Generic grants for dynamic tables, semantic views and warehouses | YAML, SQL planning and existing direct-grant detection tested; dynamic-table/semantic-view execution not yet verified live |
-| CLI `sync`, including `--dry-run` | Wired to orchestrator; additive execution, JSON/text output and failure exit codes |
+| CLI `sync`, including `--dry-run` | Additive and explicitly scoped strict execution, JSON/text output and failure exit codes |
 | API `/api/sync` and `/api/sync/dry-run` | Return HTTP 501 |
-| Strict reconciliation and authentication | Incomplete |
+| Strict permission reconciliation | Explicit role/user/object/privilege scope; no resource deletion |
+| API authentication | Not implemented |
 
 See [completion status](docs/completion-status.md) for validation evidence and remaining release work. Parallel execution is implemented; published performance targets are goals, not measured speedup guarantees.
 
@@ -174,7 +175,7 @@ Apply a reviewed configuration in a sandbox:
 ./bin/gatekeep sync --config your-sandbox.yaml --mode additive
 ```
 
-`--workers` and `--timeout` configure concurrency and per-operation execution timeout. Defaults come from `SYNC_WORKERS`, `SYNC_TIMEOUT` and `SYNC_MODE`, falling back to 10 workers, 30 seconds and additive mode. Strict mode is available for dry-runs only; execution is rejected. Dry-runs do not execute planned SQL or write audit history. Exit code 0 means success, 1 means validation/connection/execution/output failure, and 2 means invalid command/options. JSON failures produce a structured failure result after valid option parsing; flag-parser errors go to stderr.
+`--workers` and `--timeout` configure concurrency and per-operation execution timeout. Defaults come from `SYNC_WORKERS`, `SYNC_TIMEOUT` and `SYNC_MODE`, falling back to 10 workers, 30 seconds and additive mode. Strict mode requires an explicit `managed` scope and never deletes resources. See [scoped reconciliation](docs/reconciliation.md) and [the example configuration](configs/scoped-reconciliation.yaml). Dry-runs do not execute planned SQL or write audit history. Exit code 0 means success, 1 means validation/connection/execution/output failure, and 2 means invalid command/options. JSON failures produce a structured failure result after valid option parsing; flag-parser errors go to stderr.
 
 The existing nested table and warehouse syntax remains supported. Generic objects grant access to existing resources; they do not create dynamic tables, semantic views or warehouses. ALL/FUTURE scopes, wildcard discovery, ownership transfer, grant option, function/procedure signatures and database-role recipients are not implemented in this model.
 
@@ -200,10 +201,10 @@ Before using GateKeep as an operational replacement, complete and verify:
 
 - Verify the wired CLI and audit records against your sandbox, including meaningful failure exit codes and machine-readable output.
 - Authentication and authorization for any remotely accessible API.
-- A defined managed scope for reconciliation, with tests covering additions, revocations and preservation of unrelated access.
+- Review an explicit managed scope and validate its revocations against isolated resources; automated tests cover preservation of unrelated access.
 - Live grant tests for the Snowflake object types and privilege combinations your organization uses.
 
-The current strict-mode differ can select non-system roles omitted from YAML for deletion and user role assignments outside the configuration for revocation; object and hierarchy revocation are still incomplete. Do not treat strict mode as ready for a shared account. The CLI honors `SYNC_MODE`, but rejects strict execution; use `--mode additive` to override an older environment setting.
+Strict mode only revokes permissions within the explicit role/user/object/privilege scope. It preserves omitted resources and unrelated access. The CLI honors `SYNC_MODE`; use `--mode additive` during an initial pilot, then review a scoped strict dry-run before testing revocations.
 
 ### 4. Prove writes in an isolated sandbox
 
@@ -270,7 +271,7 @@ configs/                 Configuration examples
 
 ## Contributing and roadmap
 
-Contributions are welcome. Priorities are sandbox CLI validation, scoped reconciliation, ALL/FUTURE grants, live coverage for more object types, authentication, and production frontend hosting. Run the relevant Go/frontend checks with your changes and describe what you verified in your pull request.
+Contributions are welcome. Priorities are live scoped reconciliation validation, ALL/FUTURE grants, live coverage for more object types, authentication, and production frontend hosting. Run the relevant Go/frontend checks with your changes and describe what you verified in your pull request.
 
 Older [getting-started notes](docs/getting-started.md) describe the intended end-to-end workflow; use this README and [completion status](docs/completion-status.md) for current availability.
 

@@ -67,3 +67,8 @@ func (l *NoOpLogger) GetSyncRunDetails(ctx context.Context, syncRunID int64) (*r
 func (l *NoOpLogger) CleanupOldLogs(ctx context.Context) (int64, error) {
 	return 0, nil
 }
+
+// RecordOperationSkipped is a no-op.
+func (l *NoOpLogger) RecordOperationSkipped(ctx context.Context, opID int64, reason string) error {
+	return nil
+}

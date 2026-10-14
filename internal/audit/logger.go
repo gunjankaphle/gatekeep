@@ -50,7 +50,7 @@ func (l *Logger) CompleteSync(ctx context.Context, syncRunID int64, totalOps, su
 	durationMs := time.Since(startTime).Milliseconds()
 
 	var status repository.SyncStatus
-	if failedOps == 0 {
+	if failedOps == 0 && successOps == totalOps {
 		status = repository.SyncStatusSuccess
 	} else if successOps > 0 {
 		status = repository.SyncStatusPartial
@@ -156,4 +156,9 @@ func (l *Logger) CleanupOldLogs(ctx context.Context) (int64, error) {
 func computeConfigHash(content []byte) string {
 	hash := sha256.Sum256(content)
 	return hex.EncodeToString(hash[:])
+}
+
+// RecordOperationSkipped records a planned operation that was never executed.
+func (l *Logger) RecordOperationSkipped(ctx context.Context, opID int64, reason string) error {
+	return l.repo.UpdateOperation(ctx, opID, repository.UpdateOperationParams{Status: repository.OperationStatusSkipped, ErrorMessage: &reason})
 }

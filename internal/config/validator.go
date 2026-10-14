@@ -53,7 +53,10 @@ func (v *Validator) Validate(config *Config) error {
 		return err
 	}
 
-	return v.validateObjects(config.Objects, roleMap)
+	if err := v.validateObjects(config.Objects, roleMap); err != nil {
+		return err
+	}
+	return ValidateManagedScope(config.Managed)
 }
 
 // validateRoleHierarchy validates role parent references and detects cycles

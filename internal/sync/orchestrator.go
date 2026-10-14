@@ -82,7 +82,11 @@ func (o *Orchestrator) Sync(ctx context.Context, configPath string, syncConfig C
 	}
 
 	validator := config.NewValidator()
-	if validationErr := validator.Validate(cfg); validationErr != nil {
+	validationErr := validator.Validate(cfg)
+	if validationErr == nil && o.syncMode == diff.SyncModeStrict && cfg.Managed == nil {
+		validationErr = fmt.Errorf("strict mode requires an explicit managed scope")
+	}
+	if validationErr != nil {
 		result.Status = StatusFailed
 		result.ErrorMessage = fmt.Sprintf("config validation failed: %v", validationErr)
 		result.CompletedAt = time.Now()
@@ -179,25 +183,28 @@ func (o *Orchestrator) Sync(ctx context.Context, configPath string, syncConfig C
 	// Step 6: Compute final status
 	successCount := 0
 	failedCount := 0
+	skippedCount := 0
 	for _, opResult := range opResults {
 		if opResult.Status == OpStatusSuccess {
 			successCount++
 		} else if opResult.Status == OpStatusFailed {
 			failedCount++
+		} else {
+			skippedCount++
 		}
 	}
 
 	result.OperationsSuccess = successCount
 	result.OperationsFailed = failedCount
 
-	if failedCount == 0 {
+	if failedCount == 0 && skippedCount == 0 {
 		result.Status = StatusSuccess
 	} else if successCount > 0 {
 		result.Status = StatusPartial
-		result.ErrorMessage = fmt.Sprintf("%d operations failed", failedCount)
+		result.ErrorMessage = fmt.Sprintf("%d operations failed, %d skipped", failedCount, skippedCount)
 	} else {
 		result.Status = StatusFailed
-		result.ErrorMessage = "all operations failed"
+		result.ErrorMessage = fmt.Sprintf("%d operations failed, %d skipped", failedCount, skippedCount)
 	}
 
 	result.CompletedAt = time.Now()
@@ -213,8 +220,7 @@ func (o *Orchestrator) Sync(ctx context.Context, configPath string, syncConfig C
 
 // execute runs operations with parallel execution
 func (o *Orchestrator) execute(ctx context.Context, operations []diff.SQLOperation, syncConfig Config) []OperationResult {
-	parallelExecutor := NewParallelExecutor(o.executor, syncConfig)
-	return parallelExecutor.Execute(ctx, operations)
+	return o.executePhases(ctx, operations, syncConfig)
 }
 
 // executeWithAudit runs operations with audit logging
@@ -244,6 +250,8 @@ func (o *Orchestrator) executeWithAudit(ctx context.Context, operations []diff.S
 				_ = o.auditLogger.RecordOperationSuccess(ctx, opID, executionTimeMs) // nolint:errcheck // audit errors are non-fatal
 			} else if result.Status == OpStatusFailed {
 				_ = o.auditLogger.RecordOperationFailure(ctx, opID, result.Error, executionTimeMs) // nolint:errcheck // audit errors are non-fatal
+			} else if result.Status == OpStatusSkipped {
+				_ = o.auditLogger.RecordOperationSkipped(ctx, opID, result.Error) // nolint:errcheck // audit errors are non-fatal
 			}
 		}
 	}

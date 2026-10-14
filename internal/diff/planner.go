@@ -97,7 +97,7 @@ func (p *Planner) generateCreateDatabases() []SQLOperation {
 	for _, db := range p.diff.DatabasesToCreate {
 		ops = append(ops, SQLOperation{
 			Type:        OpCreateDatabase,
-			SQL:         fmt.Sprintf("CREATE DATABASE IF NOT EXISTS \"%s\"", db),
+			SQL:         fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", quoteSQLIdentifier(db)),
 			Target:      db,
 			Description: fmt.Sprintf("Create database %s", db),
 		})
@@ -111,7 +111,7 @@ func (p *Planner) generateCreateWarehouses() []SQLOperation {
 	for _, wh := range p.diff.WarehousesToCreate {
 		ops = append(ops, SQLOperation{
 			Type:        OpCreateWarehouse,
-			SQL:         fmt.Sprintf("CREATE WAREHOUSE IF NOT EXISTS \"%s\"", wh),
+			SQL:         fmt.Sprintf("CREATE WAREHOUSE IF NOT EXISTS %s", quoteSQLIdentifier(wh)),
 			Target:      wh,
 			Description: fmt.Sprintf("Create warehouse %s", wh),
 		})
@@ -131,7 +131,7 @@ func (p *Planner) generateCreateRoles() []SQLOperation {
 	for _, role := range roles {
 		ops = append(ops, SQLOperation{
 			Type:        OpCreateRole,
-			SQL:         fmt.Sprintf("CREATE ROLE IF NOT EXISTS \"%s\"", role),
+			SQL:         fmt.Sprintf("CREATE ROLE IF NOT EXISTS %s", quoteSQLIdentifier(role)),
 			Target:      role,
 			Description: fmt.Sprintf("Create role %s", role),
 		})
@@ -158,7 +158,7 @@ func (p *Planner) generateGrantRoles() []SQLOperation {
 	for _, grant := range grants {
 		ops = append(ops, SQLOperation{
 			Type:        OpGrantRole,
-			SQL:         fmt.Sprintf("GRANT ROLE \"%s\" TO ROLE \"%s\"", grant.Role, grant.ToRole),
+			SQL:         fmt.Sprintf("GRANT ROLE %s TO ROLE %s", quoteSQLIdentifier(grant.Role), quoteSQLIdentifier(grant.ToRole)),
 			Target:      grant.Role,
 			Description: fmt.Sprintf("Grant role %s to role %s", grant.Role, grant.ToRole),
 		})
@@ -218,7 +218,7 @@ func (p *Planner) generateCreateUsers() []SQLOperation {
 	for _, user := range users {
 		ops = append(ops, SQLOperation{
 			Type:        OpCreateUser,
-			SQL:         fmt.Sprintf("CREATE USER IF NOT EXISTS \"%s\"", user),
+			SQL:         fmt.Sprintf("CREATE USER IF NOT EXISTS %s", quoteSQLIdentifier(user)),
 			Target:      user,
 			Description: fmt.Sprintf("Create user %s", user),
 		})
@@ -244,7 +244,7 @@ func (p *Planner) generateGrantUserRoles() []SQLOperation {
 	for _, grant := range grants {
 		ops = append(ops, SQLOperation{
 			Type:        OpGrantUserRole,
-			SQL:         fmt.Sprintf("GRANT ROLE \"%s\" TO USER \"%s\"", grant.Role, grant.ToUser),
+			SQL:         fmt.Sprintf("GRANT ROLE %s TO USER %s", quoteSQLIdentifier(grant.Role), quoteSQLIdentifier(grant.ToUser)),
 			Target:      grant.ToUser,
 			Description: fmt.Sprintf("Grant role %s to user %s", grant.Role, grant.ToUser),
 		})
@@ -270,7 +270,7 @@ func (p *Planner) generateRevokeUserRoles() []SQLOperation {
 	for _, revoke := range revokes {
 		ops = append(ops, SQLOperation{
 			Type:        OpRevokeUserRole,
-			SQL:         fmt.Sprintf("REVOKE ROLE \"%s\" FROM USER \"%s\"", revoke.Role, revoke.ToUser),
+			SQL:         fmt.Sprintf("REVOKE ROLE %s FROM USER %s", quoteSQLIdentifier(revoke.Role), quoteSQLIdentifier(revoke.ToUser)),
 			Target:      revoke.ToUser,
 			Description: fmt.Sprintf("Revoke role %s from user %s", revoke.Role, revoke.ToUser),
 		})
@@ -335,7 +335,7 @@ func (p *Planner) generateRevokeRoles() []SQLOperation {
 	for _, revoke := range revokes {
 		ops = append(ops, SQLOperation{
 			Type:        OpRevokeRole,
-			SQL:         fmt.Sprintf("REVOKE ROLE \"%s\" FROM ROLE \"%s\"", revoke.Role, revoke.ToRole),
+			SQL:         fmt.Sprintf("REVOKE ROLE %s FROM ROLE %s", quoteSQLIdentifier(revoke.Role), quoteSQLIdentifier(revoke.ToRole)),
 			Target:      revoke.Role,
 			Description: fmt.Sprintf("Revoke role %s from role %s", revoke.Role, revoke.ToRole),
 		})
@@ -361,7 +361,7 @@ func (p *Planner) generateDeleteRoles() []SQLOperation {
 
 		ops = append(ops, SQLOperation{
 			Type:        OpDeleteRole,
-			SQL:         fmt.Sprintf("DROP ROLE IF EXISTS \"%s\"", role),
+			SQL:         fmt.Sprintf("DROP ROLE IF EXISTS %s", quoteSQLIdentifier(role)),
 			Target:      role,
 			Description: fmt.Sprintf("Delete role %s", role),
 		})

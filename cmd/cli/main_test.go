@@ -113,3 +113,21 @@ func TestUnknownCommand(t *testing.T) {
 		t.Fatal("unknown command succeeded")
 	}
 }
+
+func TestStrictRequiresScopeBeforeConnecting(t *testing.T) {
+	path := testConfig(t)
+	for _, dry := range []bool{false, true} {
+		args := []string{"sync", "--config", path, "--mode", "strict", "--format", "json"}
+		if dry {
+			args = append(args, "--dry-run")
+		}
+		var out, errOut bytes.Buffer
+		code := run(context.Background(), args, &out, &errOut, func(context.Context, syncOptions) (*gatesync.Result, error) {
+			t.Fatal("connected without scope")
+			return nil, nil
+		})
+		if code != 2 {
+			t.Fatalf("expected usage error: %d %s", code, out.String())
+		}
+	}
+}

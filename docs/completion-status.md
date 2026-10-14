@@ -48,9 +48,9 @@ Follow-up UI and smoke-sync validation:
 ## Remaining release work, in order
 
 1. Add persistent regression coverage for cache rollback, refresh failure and concurrent refresh behavior. Live cache array encoding and hierarchy reads have passed.
-2. Fix or omit the invalid default database in local configuration. Live SHOW output and cache refresh have passed; test a real CLI additive dry-run.
-3. CLI sync/dry-run wiring is implemented locally with additive execution, JSON/text output, option validation and nonzero failure exits. Strict execution is disabled. Live additive CLI dry-run has been verified against the isolated smoke-test role. Next complete reconciliation in `internal/diff/differ.go`: suppress already-existing object/hierarchy grants and implement role/object grant revocation. Define managed scope before enabling strict mode on a shared account: current strict mode can drop non-system roles omitted from YAML and revoke user assignments outside the configuration.
-4. Extend generic named-object grants with scoped ALL/FUTURE grants, function signatures and strict reconciliation. Named-object SQL now quotes identifier parts separately; dynamic table/semantic view/warehouse planning and direct-grant idempotency have regression tests. See `docs/object-grants.md`.
+2. Fix or omit the invalid default database in local configuration. Live SHOW output, cache refresh, and real CLI additive and scoped strict dry-runs have passed.
+3. Scoped strict reconciliation is implemented: existing hierarchy grants are suppressed, role/user/object revocations require explicit scope, and omitted resources are never deleted. Execution honors dependency phases and stops later phases after failures. Validate meaningful grant/revoke behavior against isolated live objects before team adoption.
+4. Extend generic named-object grants with scoped ALL/FUTURE grants and function signatures. Named-object SQL now quotes identifier parts separately; dynamic table/semantic view/warehouse planning and direct-grant idempotency have regression tests. See `docs/object-grants.md`.
 5. Validate sync against an isolated Snowflake sandbox, then verify a second run produces no changes and audit history records results.
 6. Add authentication and access restrictions before exposing the API. Sync API endpoints deliberately return HTTP 501; decide whether writes belong in the first release or remain CLI-only.
 7. Finish production frontend serving/deployment and update old documentation/claims (performance benchmarks are not validated here).
@@ -88,10 +88,24 @@ Open the URL Vite prints and use Roles → Refresh from Snowflake. The refresh r
 
 ## CLI follow-up
 
-The CLI now calls the existing orchestrator. It validates YAML before connecting, honors mode/workers/timeout settings and supports `--dry-run`, `--format json`, and additive execution. Dry-run results label SQL operations as `planned`; dry-runs skip audit initialization. Strict execution is rejected pending managed-scope work. Unknown commands/options and execution failures return nonzero exits.
+The CLI now calls the existing orchestrator. It validates YAML before connecting, honors mode/workers/timeout settings and supports `--dry-run`, `--format json`, and additive execution. Dry-run results label SQL operations as `planned`; dry-runs skip audit initialization. Strict execution now requires an explicit managed scope; see the follow-up below. Unknown commands/options and execution failures return nonzero exits.
 
 Automated integration tests use simulated Snowflake SQL rows to exercise CLI-to-orchestrator planning/execution and ensure dry-run executes no write SQL. This is not a new live Snowflake execution test.
 
-Git writes and network access are now available. The follow-up branch `feat/cli-sync-lint-v2` was rebased onto merged `origin/main` (`76a6f23`), preserving the local changes. No follow-up commit or push has been performed.
+Git writes and network access are now available. The follow-up branch `feat/cli-sync-lint-v2` was rebased onto merged `origin/main` (`76a6f23`), preserving the local changes. PR #12 was created, passed all GitHub Actions checks, and was merged.
 
-Validation for this follow-up: Go short tests with the race detector, CLI integration tests, golangci-lint and CLI build passed. The built CLI validated the generic-object example and rejected strict execution with structured JSON and exit code 2. The live additive CLI dry-run against `configs/smoke-test.yaml` succeeded with zero planned operations, confirming the existing smoke-test role needs no changes. No new execute-mode request was made. CI and local tooling now use golangci-lint v2 to support current Go export data; the v2 configuration and lint checks pass.
+Validation for this follow-up: Go short tests with the race detector, CLI integration tests, golangci-lint and CLI build passed. The built CLI validated the generic-object example and rejected unscoped strict execution with structured JSON and exit code 2. The live additive CLI dry-run against `configs/smoke-test.yaml` succeeded with zero planned operations, confirming the existing smoke-test role needs no changes. No new execute-mode request was made. CI and local tooling now use golangci-lint v2 to support current Go export data; the v2 configuration and lint checks pass.
+
+
+## Scoped reconciliation follow-up
+
+Started from merged `main` on `feat/scoped-reconciliation`.
+
+- An explicit `managed` scope limits revocations by roles, users, exact named objects and individual privileges; system roles and ownership cannot be managed.
+- Strict mode no longer drops omitted roles or revokes assignments for unrelated users/roles. Removed desired entries can be reconciled while their scope entries remain.
+- Direct hierarchy grants and duplicate desired edges are recognized, including unchanged reruns.
+- Execution follows dependency phases and stops later phases after failures; skipped operations are recorded in audit history.
+- CLI strict dry-run and execution require scope before connecting. Named-object scopes with dotted/quoted identifier parts are rejected until state-name matching supports them unambiguously.
+- Regression coverage exercises scope isolation, deduplication, idempotency, identifier quoting and failed prerequisites preventing revocation. See `docs/reconciliation.md` and `configs/scoped-reconciliation.yaml`.
+
+Validation: Go race tests, golangci-lint v2 (zero issues), CLI build, example validation, and a live scoped strict dry-run all passed. The live preview used the existing smoke-test role and SECURITYADMIN → ACCOUNTADMIN hierarchy and returned zero operations, confirming existing hierarchy grants are recognized. This follow-up performed no Snowflake writes; real scoped grant/revoke execution remains an adoption check.
