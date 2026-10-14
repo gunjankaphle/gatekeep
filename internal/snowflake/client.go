@@ -12,6 +12,7 @@ import (
 type Client interface {
 	Query(query string) (*sql.Rows, error)
 	Exec(query string) (sql.Result, error)
+	ExecContext(ctx context.Context, query string) (sql.Result, error)
 	Close() error
 }
 
@@ -72,7 +73,12 @@ func (c *client) Query(query string) (*sql.Rows, error) {
 
 // Exec executes a query that doesn't return rows
 func (c *client) Exec(query string) (sql.Result, error) {
-	return c.db.ExecContext(context.Background(), query)
+	return c.ExecContext(context.Background(), query)
+}
+
+// ExecContext carries cancellation and deadlines through to the SQL driver.
+func (c *client) ExecContext(ctx context.Context, query string) (sql.Result, error) {
+	return c.db.ExecContext(ctx, query)
 }
 
 // Close closes the database connection

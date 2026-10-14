@@ -35,7 +35,14 @@ func (e *Executor) Execute(ctx context.Context, sql string) ExecutionResult {
 	}
 
 	// Execute the SQL statement
-	sqlResult, err := e.client.Exec(sql)
+	if err := ctx.Err(); err != nil {
+		result.Error = err
+		return result
+	}
+	sqlResult, err := e.client.ExecContext(ctx, sql)
+	if err == nil {
+		err = ctx.Err()
+	}
 	result.ExecutionTime = time.Since(start)
 
 	if err != nil {

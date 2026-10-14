@@ -18,8 +18,7 @@ func ValidateManagedScope(scope *ManagedScope) error {
 		if strings.TrimSpace(role) == "" || strings.ContainsRune(role, 0) || roles[role] {
 			return fmt.Errorf("invalid or duplicate managed role: %q", role)
 		}
-		switch strings.ToUpper(role) {
-		case "ACCOUNTADMIN", "SECURITYADMIN", "SYSADMIN", "USERADMIN", "PUBLIC", "ORGADMIN":
+		if IsSystemRole(role) {
 			return fmt.Errorf("system role cannot be managed: %s", role)
 		}
 		roles[role] = true

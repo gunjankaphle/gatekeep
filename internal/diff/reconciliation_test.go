@@ -112,7 +112,7 @@ func TestStrictScopeIsolationAndRemovedDesiredEntries(t *testing.T) {
 }
 
 func TestStrictRejectsMissingOrUnsafeScope(t *testing.T) {
-	for _, scope := range []*config.ManagedScope{nil, {}, {Roles: []string{"ACCOUNTADMIN"}}, {Roles: []string{"R"}, Objects: []config.ManagedObject{{Type: "TABLE", Name: []string{"DB", "S", "T"}, Privileges: []string{"OWNERSHIP"}}}}} {
+	for _, scope := range []*config.ManagedScope{nil, {}, {Roles: []string{"ACCOUNTADMIN"}}, {Roles: []string{"GLOBALORGADMIN"}}, {Roles: []string{"R"}, Objects: []config.ManagedObject{{Type: "TABLE", Name: []string{"DB", "S", "T"}, Privileges: []string{"OWNERSHIP"}}}}} {
 		if _, err := NewDiffer(SyncModeStrict).ComputeDiff(Input{DesiredConfig: config.Config{Managed: scope}}); err == nil {
 			t.Fatalf("accepted unsafe scope: %+v", scope)
 		}

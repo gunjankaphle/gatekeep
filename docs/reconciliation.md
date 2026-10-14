@@ -35,7 +35,9 @@ Revocation boundaries are explicit:
 
 Scope entries do not grant permissions or create resources. They may remain after removing a desired grant or user entry, allowing GateKeep to revoke that access. To stop managing access without changing it, remove its scope entry. Additions still come from the entire desired configuration, including entries outside the revocation scope.
 
-System roles cannot appear in `managed.roles`. Ownership transfers, ALL privileges, account/global permissions, database-role recipients, function/procedure signatures, and future grants are outside this model. Managed object name parts containing dots or double quotes are rejected because the current SHOW state model cannot match those boundaries unambiguously; ordinary additive named-object grants still support these identifiers. Matching is case-sensitive for identifiers; SHOW object types such as `DYNAMIC_TABLE` normalize to their SQL form.
+YAML validation rejects unknown fields and multiple documents, so a misspelled desired field fails before connecting rather than being treated as removed access.
+
+System roles (including GLOBALORGADMIN) cannot appear in `managed.roles`. Ownership transfers, ALL privileges, account/global permissions, database-role recipients, function/procedure signatures, and future grants are outside this model. Managed object name parts containing dots or double quotes are rejected because the current SHOW state model cannot match those boundaries unambiguously; ordinary additive named-object grants still support these identifiers. Matching is case-sensitive for identifiers; SHOW object types such as `DYNAMIC_TABLE` normalize to their SQL form.
 
 Preview and review before executing:
 

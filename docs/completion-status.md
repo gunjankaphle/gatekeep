@@ -109,3 +109,11 @@ Started from merged `main` on `feat/scoped-reconciliation`.
 - Regression coverage exercises scope isolation, deduplication, idempotency, identifier quoting and failed prerequisites preventing revocation. See `docs/reconciliation.md` and `configs/scoped-reconciliation.yaml`.
 
 Validation: Go race tests, golangci-lint v2 (zero issues), CLI build, example validation, and a live scoped strict dry-run all passed. The live preview used the existing smoke-test role and SECURITYADMIN → ACCOUNTADMIN hierarchy and returned zero operations, confirming existing hierarchy grants are recognized. This follow-up performed no Snowflake writes; real scoped grant/revoke execution remains an adoption check.
+
+
+## PR #13 review corrections
+
+- YAML decoding rejects unknown fields at every level and extra documents; CLI validation fails before connecting.
+- The shared system-role guard includes GLOBALORGADMIN for scope validation and planner protection.
+- SQL execution carries operation deadlines/cancellation through `ExecContext` to the driver; timed-out prerequisite operations prevent later revocations.
+- Regression tests reproduced all three findings before the fixes and cover the corrected paths.

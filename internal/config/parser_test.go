@@ -171,3 +171,18 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestParserRejectsUnknownFieldsAndExtraDocuments(t *testing.T) {
+	for name, data := range map[string]string{
+		"hierarchy typo":         "version: '1.0'\nmanaged:\n  roles: [CHILD, PARENT]\nroles:\n  - name: CHILD\n    parent_role: [PARENT]\n  - name: PARENT\n",
+		"desired section typo":   "version: '1.0'\nmanaged:\n  roles: [R]\nobject:\n  - type: WAREHOUSE\n    name: [W]\n",
+		"managed privilege typo": "version: '1.0'\nmanaged:\n  roles: [R]\n  objects:\n    - type: TABLE\n      name: [D, S, T]\n      privileges: [SELECT]\n      privilege: [MONITOR]\n",
+		"extra document":         "version: '1.0'\n---\nroles:\n  - name: R\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := NewParser().Parse([]byte(data)); err == nil {
+				t.Fatal("unsafe YAML accepted")
+			}
+		})
+	}
+}

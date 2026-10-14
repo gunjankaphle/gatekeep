@@ -131,3 +131,19 @@ func TestStrictRequiresScopeBeforeConnecting(t *testing.T) {
 		}
 	}
 }
+
+func TestStrictTypoRejectedBeforeConnecting(t *testing.T) {
+	path := testConfig(t)
+	data := []byte("version: '1.0'\nmanaged:\n  roles: [CHILD, PARENT]\nroles:\n  - name: CHILD\n    parent_role: [PARENT]\n  - name: PARENT\n")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code := run(context.Background(), []string{"sync", "--config", path, "--mode", "strict", "--format", "json"}, &out, &errOut, func(context.Context, syncOptions) (*gatesync.Result, error) {
+		t.Fatal("connected with misspelled desired field")
+		return nil, nil
+	})
+	if code != 1 {
+		t.Fatalf("exit %d: %s %s", code, out.String(), errOut.String())
+	}
+}

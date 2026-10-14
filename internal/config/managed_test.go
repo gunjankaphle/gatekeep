@@ -41,3 +41,12 @@ roles:
 		})
 	}
 }
+
+func TestOrganizationAdministratorCannotBeManaged(t *testing.T) {
+	for _, name := range []string{"GLOBALORGADMIN", "globalorgadmin"} {
+		_, err := NewParser().Parse([]byte("version: '1.0'\nmanaged:\n  roles: [" + name + "]\n  users: [admin]\n"))
+		if err == nil {
+			t.Fatalf("system role accepted: %s", name)
+		}
+	}
+}

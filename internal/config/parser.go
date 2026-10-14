@@ -1,7 +1,10 @@
 package config
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -35,9 +38,19 @@ func (p *Parser) ParseFile(path string) (*Config, error) {
 func (p *Parser) Parse(data []byte) (*Config, error) {
 	var config Config
 
-	// Unmarshal YAML
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	// Fail closed: ignored desired fields could otherwise become revocations.
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&config); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+	}
+
+	var extra interface{}
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse trailing YAML: %w", err)
+		}
+		return nil, fmt.Errorf("configuration must contain exactly one YAML document")
 	}
 
 	// Validate configuration

@@ -1,16 +1,18 @@
 package snowflake
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
 
 // MockClient is a mock implementation of Client for testing
 type MockClient struct {
-	QueryFunc func(query string) (*sql.Rows, error)
-	ExecFunc  func(query string) (sql.Result, error)
-	CloseFunc func() error
-	Closed    bool
+	ExecContextFunc func(ctx context.Context, query string) (sql.Result, error)
+	QueryFunc       func(query string) (*sql.Rows, error)
+	ExecFunc        func(query string) (sql.Result, error)
+	CloseFunc       func() error
+	Closed          bool
 }
 
 // Query calls the mock QueryFunc
@@ -62,4 +64,15 @@ type MockError struct {
 // Error returns the error message
 func (m *MockError) Error() string {
 	return m.Msg
+}
+
+// ExecContext uses a context-aware test hook, falling back to legacy SQL fixtures.
+func (m *MockClient) ExecContext(ctx context.Context, query string) (sql.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if m.ExecContextFunc != nil {
+		return m.ExecContextFunc(ctx, query)
+	}
+	return m.Exec(query)
 }

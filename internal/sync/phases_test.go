@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/yourusername/gatekeep/internal/audit"
 	"github.com/yourusername/gatekeep/internal/diff"
@@ -86,5 +87,26 @@ func TestSkippedRevocationsAreAudited(t *testing.T) {
 	}
 	if !reflect.DeepEqual(logger.recorded, []string{"failed:1", "skipped:2"}) {
 		t.Fatalf("audit left a pending operation: %v", logger.recorded)
+	}
+}
+
+func TestTimedOutGrantPreventsRevocation(t *testing.T) {
+	revoked := false
+	timedOut := false
+	client := &snowflake.MockClient{ExecContextFunc: func(ctx context.Context, query string) (sql.Result, error) {
+		if query == "grant" {
+			<-ctx.Done()
+			timedOut = true
+			return nil, ctx.Err()
+		}
+		revoked = true
+		return phaseSQLResult{}, nil
+	}}
+	o := NewOrchestrator(nil, nil, snowflake.NewExecutor(client), diff.SyncModeStrict)
+	cfg := DefaultConfig()
+	cfg.Timeout = 10 * time.Millisecond
+	results := o.execute(context.Background(), []diff.SQLOperation{{Type: diff.OpGrantObject, SQL: "grant"}, {Type: diff.OpRevokeObject, SQL: "revoke"}}, cfg)
+	if !timedOut || revoked || len(results) != 2 || results[0].Status != OpStatusFailed || results[1].Status != OpStatusSkipped {
+		t.Fatalf("deadline did not stop revocation: %+v", results)
 	}
 }

@@ -241,23 +241,7 @@ func buildWarehouseMap(warehouses []snowflake.Warehouse) map[string]snowflake.Wa
 	return m
 }
 
-func isSystemRole(roleName string) bool {
-	systemRoles := []string{
-		"ACCOUNTADMIN",
-		"SECURITYADMIN",
-		"SYSADMIN",
-		"USERADMIN",
-		"PUBLIC",
-		"ORGADMIN",
-	}
-	upper := strings.ToUpper(roleName)
-	for _, sys := range systemRoles {
-		if upper == sys {
-			return true
-		}
-	}
-	return false
-}
+func isSystemRole(roleName string) bool { return config.IsSystemRole(roleName) }
 
 func missingObjectGrants(desired []ObjectGrant, actual []snowflake.Grant) []ObjectGrant {
 	key := func(objectType, name, privilege, role string) [4]string {
